@@ -18,7 +18,7 @@ Accept payments in Bitcoin, Bitcoin Cash, Litecoin, Ethereum, Monero and IOTA di
 
 The CryptAPI module enables your PrestaShop store to get receive payments in cryptocurrency, with a simple setup and no sign-ups required.
 
-####Accepted cryptocurrencies & tokens include:
+#### Accepted cryptocurrencies & tokens include:
 
 * (BTC) Bitcoin
 * (ETH) Ethereum
