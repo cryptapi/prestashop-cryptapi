@@ -128,6 +128,7 @@ The easiest and fastest way is via our live chat on our [website](https://crypta
 * Support for BlockBee
 * New e-mail with the order payment link
 * Minor bugfixes
+* Added translations for Portuguese, Spanish, Italian and French
 
 ### Upgrade Notice
 * No breaking changes
