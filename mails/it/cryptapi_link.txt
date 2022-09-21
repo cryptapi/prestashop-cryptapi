@@ -1,0 +1,11 @@
+{shop_url}
+
+Salve {firstname} {lastname},
+
+L'ordine {order} è stato creato con successo ed è stato generato un indirizzo di pagamento per la criptovaluta {coin}.
+
+Per completare l'ordine o controllare lo stato del pagamento, utilizza il pulsante qui sotto:
+
+[Paga Ora]({url})
+
+[{shop_name}]({shop_url})

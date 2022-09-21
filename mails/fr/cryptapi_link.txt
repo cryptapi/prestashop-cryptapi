@@ -1,0 +1,11 @@
+{shop_url}
+
+Bonjour {firstname} {lastname},
+
+La commande {order} a été créée avec succès et une adresse de paiement a été générée pour la crypto-monnaie {coin}.
+
+Pour terminer votre commande ou vérifier l'état du paiement, utilisez le bouton fourni ci-dessous :
+
+[Payez Maintenant]({url})
+
+[{shop_name}]({shop_url})

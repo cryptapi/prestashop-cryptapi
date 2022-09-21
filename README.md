@@ -29,7 +29,7 @@ The CryptAPI module enables your PrestaShop store to get receive payments in cry
 * (BNB) Binance Coin
 * (USDT) USDT
 
-among many others, for a full list of the supported cryptocurrencies and tokens, check [this page](https://cryptapi.io/pricing/).
+among many others, for a full list of the supported cryptocurrencies and tokens, check [this page](https://cryptapi.io/cryptocurrencies/).
 
 #### Auto-value conversion
 
@@ -52,7 +52,7 @@ Supported currencies for automatic exchange rates are:
 * (AED) United Arab Emirates Dirham
 
 If your WooCommerce's currency is none of the above, the exchange rates will default to USD.
-If you're using WooCommerce in a different currency not listed here and need support, please [contact us](https://cryptapi.io) via our live chat.
+If you're using WooCommerce in a different currency not listed here and need support, please [contact us](https://cryptapi.io/contacts/) via our live chat.
 
 **Note:** CryptAPI will not exchange your crypto for FIAT or other crypto, just convert the value
 
@@ -62,7 +62,7 @@ CryptAPI has no setup fees, no monthly fees, no hidden costs, and you don't even
 Simply set your crypto addresses and you're ready to go. As soon as your customers pay we forward your earnings directly to your own wallet.
 
 CryptAPI has a low 1% fee on the transactions processed. No hidden costs.
-For more info on our fees [click here](https://cryptapi.io/pricing/)
+For more info on our fees [click here](https://cryptapi.io/fees/)
 
 ### Installation
 
@@ -121,8 +121,13 @@ The easiest and fastest way is via our live chat on our [website](https://crypta
 
 ### Changelog
 
-#### 1.0
+#### 1.0.0
 * Initial release.
+
+#### 1.1.0
+* Support for BlockBee
+* New e-mail with the order payment link
+* Minor bugfixes
 
 ### Upgrade Notice
 * No breaking changes

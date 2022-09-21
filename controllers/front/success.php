@@ -11,11 +11,11 @@ class CryptAPISuccessModuleFrontController extends ModuleFrontController
         try {
             $metaData = json_decode(cryptapi::getPaymentResponse($orderId), true);
         } catch (Exception $e) {
-            die($this->module->l('Order not found.', 'success'));
+            die($this->module->l('Order not found.', 'success', 'en'));
         }
 
         if (empty($nonce) || $nonce != $metaData['cryptapi_nonce']) {
-            die($this->module->l('The given nonce is not valid.', 'success'));
+            die($this->module->l('The given nonce is not valid.', 'success', 'en'));
         }
 
         $order = new Order((int)$orderId);
@@ -65,6 +65,7 @@ class CryptAPISuccessModuleFrontController extends ModuleFrontController
             'crypto_allowed_value' => $crypto_allowed_value,
             'min_tx' => $metaData['cryptapi_min'] . ' ' . strtoupper($metaData['cryptapi_currency']),
             'refresh_value_interval' => $refresh_value_interval,
+            'order_cancelation_timeout' => $order_cancelation_timeout,
         ]);
 
         $this->setTemplate('module:cryptapi/views/templates/front/payment_success.tpl');

@@ -8,25 +8,26 @@
                     {if $crypto_allowed_value == true}
                         <div class="inner-wrapper">
                             <figure>
-                                {if $qr_code_setting != 'hide_without_ammount'}
-                                    <img class="ca_qrcode no_value" {if $qr_code_setting === 'ammount'}style="display:none;"{/if} src="data:image/png;base64,{$qr_code_img}"
+                                {if $qr_code_setting != 'hide_without_amount'}
+                                    <img class="ca_qrcode no_value" {if $qr_code_setting === 'amount'}style="display:none;"{/if} src="data:image/png;base64,{$qr_code_img}"
                                          alt="{l s='QR Code without value' mod='cryptapi'}"/>
                                 {/if}
-                                {if $qr_code_setting != 'hide_ammount'}
-                                    <img class="ca_qrcode value" {if $qr_code_setting === 'without_ammount'}style="display:none;"{/if} src="data:image/png;base64,{$qr_code_img_value}"
+                                {if $qr_code_setting != 'hide_amount'}
+                                    <img class="ca_qrcode value" {if $qr_code_setting === 'without_amount'}style="display:none;"{/if} src="data:image/png;base64,{$qr_code_img_value}"
                                          alt="{l s='QR Code with value' mod='cryptapi'}"/>
                                 {/if}
                             </figure>
-                            {if $qr_code_setting != 'hide_ammount' && $qr_code_setting != 'hide_without_ammount'}
+                            {if $qr_code_setting != 'hide_amount' && $qr_code_setting != 'hide_without_amount'}
                                 <div class="ca_qrcode_buttons">
-                                    {if $qr_code_setting != 'hide_without_ammount'}
-                                        <button class="ca_qrcode_btn no_value {if $qr_code_setting === 'without_ammount'}active{/if}" aria-label="{l s='Show QR Code without value' mod='cryptapi'}">
+                                    {if $qr_code_setting != 'hide_without_amount'}
+                                        <button class="ca_qrcode_btn no_value {if $qr_code_setting === 'without_amount'}active{/if}"
+                                                aria-label="{l s='Show QR Code without value' mod='cryptapi'}">
                                             {l s='ADDRESS' mod='cryptapi'}
                                         </button>
                                     {/if}
-                                    {if $qr_code_setting != 'hide_ammount'}
-                                        <button class="ca_qrcode_btn value {if $qr_code_setting === 'ammount'}active{/if}" aria-label="{l s='Show QR Code with value' mod='cryptapi'}">
-                                            {l s='WITH AMMOUNT' mod='cryptapi'}
+                                    {if $qr_code_setting != 'hide_amount'}
+                                        <button class="ca_qrcode_btn value {if $qr_code_setting === 'amount'}active{/if}" aria-label="{l s='Show QR Code with value' mod='cryptapi'}">
+                                            {l s='WITH AMOUNT' mod='cryptapi'}
                                         </button>
                                     {/if}
                                 </div>
@@ -59,11 +60,11 @@
                     </div>
                     <div class="ca_payment_notification ca_notification_payment_received" style="display: none;">
                         {l s='So far you sent' mod='cryptapi' }
-                        <strong><span class="ca_notification_ammount"></span></strong>
+                        <strong><span class="ca_notification_amount"></span></strong>
                         {l s='Please send a new payment to complete the order, as requested above' mod='cryptapi'}
                     </div>
                     <div class="ca_payment_notification ca_notification_remaining" style="display: none">
-                        <strong>{l s='Notice' mod='cryptapi'}</strong>{l s='For technical reasons, the minimum amount for each transaction is %1s, so we adjusted the value by adding the remaining to it.' mod='cryptapi' sprintf=[$min_tx, '<span class="ca_notification_remaining"></span>']}
+                        <strong>{l s='Notice' mod='cryptapi'}: </strong>{l s='For technical reasons, the minimum amount for each transaction is %1s, so we adjusted the value by adding the remaining to it.' mod='cryptapi' sprintf=[$min_tx, '<span class="ca_notification_remaining"></span>']}
                     </div>
                     {if $refresh_value_interval != 0}
                         <div class="ca_time_refresh">
@@ -81,6 +82,10 @@
                         <div class="ca_loader"></div>
                     </div>
                 </div>
+                {if $order_cancelation_timeout != 0}
+                    <span class="ca_notification_cancel"
+                          data-text="{l s='Order will be cancelled in less than a minute.' mod='cryptapi'}">{l s='This order will be valid for' mod='cryptapi'} <strong><span class="ca_cancel_timer" data-timestamp="{$cancel_timer}">{date('H:i', $cancel_timer)}</span></strong></span>
+                {/if}
                 <div class="ca_buttons_container">
                     <a class="ca_show_qr" href="#" aria-label="{l s='Show the QR code' mod='cryptapi'}">
                         <span class="ca_show_qr_open {if !$qrcode_default}active{/if}">

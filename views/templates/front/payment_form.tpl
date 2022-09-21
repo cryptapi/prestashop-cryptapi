@@ -25,13 +25,12 @@
 
 <form action="{$action}" id="payment-form">
     <p>
-        <select id="coin" name="cryptapi_coin">
+        <select class="form-control form-control-select" id="coin" name="cryptapi_coin">
             <option value="none">{l s='Please select a cryptocurrency' mod='cryptapi'}</option>
             {foreach from=$cryptocurrencies key=myId item=i}
                 <option value="{$i.ticker}">{$i.coin}</option>
             {/foreach}
         </select>
-        <input id="fee" name="cryptapi_fee" type="hidden" value="0">
     </p>
     <div id="cryptapi_fee" class="definition-list additional-information" style="display: none;">
         <dl>
@@ -47,20 +46,25 @@
     document.getElementById('coin').addEventListener('change', function () {
         let val = this.value;
         const payment_fee = document.getElementById('cryptapi_fee');
+        const buttonContainer = document.querySelector('.js-payment-confirmation');
+        const confirmButton = buttonContainer.querySelector('.ps-shown-by-js');
+
+        confirmButton.style.display = 'none';
 
         fetch(fee_url + '?cryptapi_coin=' + val)
             .then(function (response) {
                 return response.json();
-            }).then(function (data) {
-            if (data.fee === 0) {
-                payment_fee.style.display = 'none';
-                return;
-            }
-            document.getElementById('fee').value = parseFloat(data.fee)
-            document.getElementById('cryptapi_payment_fee').innerHTML = data.fee;
-            document.getElementById('cryptapi_payment_total').innerHTML = data.total;
-            payment_fee.style.display = 'block';
-        });
+            })
+            .then(function (data) {
+                confirmButton.style.display = 'block';
+                if (data.fee === 0) {
+                    confirmButton.style.display = 'block';
+                    return;
+                }
+                document.getElementById('cryptapi_payment_fee').innerHTML = data.fee;
+                document.getElementById('cryptapi_payment_total').innerHTML = data.total;
+                payment_fee.style.display = 'block';
+            });
     });
 </script>
 

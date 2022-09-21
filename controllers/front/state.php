@@ -8,7 +8,7 @@ class CryptAPIStateModuleFrontController extends ModuleFrontController
         require_once _PS_MODULE_DIR_ . 'cryptapi/lib/CryptAPIHelper.php';
 
         if (empty($_REQUEST['order_id']) || empty($_REQUEST['nonce'])) {
-            die($this->module->l('Order not found.', 'error'));
+            die($this->module->l('Order not found.', 'error', 'en'));
         }
 
         $orderId = $_REQUEST['order_id'];
@@ -18,7 +18,7 @@ class CryptAPIStateModuleFrontController extends ModuleFrontController
             $metaData = json_decode(cryptapi::getPaymentResponse($orderId), true);
             $historyDb = $metaData['cryptapi_history'];
         } catch (Exception $e) {
-            die($this->module->l('Order not found.', 'error'));
+            die($this->module->l('Order not found.', 'error', 'en'));
         }
 
         if (empty($nonce) || $nonce !== $metaData['cryptapi_nonce']) {
@@ -49,7 +49,7 @@ class CryptAPIStateModuleFrontController extends ModuleFrontController
 
         $counterCalc = (int)$metaData['cryptapi_last_price_update'] + (int)Configuration::get('refresh_value_interval') - time();
 
-        if ($counterCalc <= 0 && $paid) {
+        if ($counterCalc < 0 && !$paid) {
             cryptapi::cryptapiCronjob();
         }
 

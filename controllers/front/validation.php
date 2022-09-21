@@ -36,7 +36,9 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
 
         $addr = Configuration::get($selected . '_address');
 
-        $fee = $_REQUEST['cryptapi_fee'];
+
+        session_start();
+        $fee = $_SESSION['cryptapi_fee'];
 
         $total = (float)$cart->getOrderTotal(true, Cart::BOTH) + $fee;
         $currency = $this->context->currency;
@@ -77,7 +79,6 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
 
         $callbackUrl = _PS_BASE_URL_ . __PS_BASE_URI__ . 'module/cryptapi/callback?order=' . $orderId . '&nonce=' . $nonce;
 
-
         $api = new CryptAPIHelper($selected, $addr, $apiKey, $callbackUrl, [], true);
 
         // This gives error
@@ -89,6 +90,7 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
 
         $qrCodeDataValue = $api->get_qrcode($cryptoTotal, $qrCodeSize);
         $qrCodeData = $api->get_qrcode('', $qrCodeSize);
+        $paymentURL = _PS_BASE_URL_ . __PS_BASE_URI__ . 'module/cryptapi/success?order_id=' . $this->module->currentOrder . '&nonce=' . $nonce;
 
         $paymentData = [
             'cryptapi_nonce' => $nonce,
@@ -103,6 +105,7 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
             'cryptapi_fee' => $fee,
             'cryptapi_order_created' => time(),
             'cryptapi_history' => [],
+            'cryptapi_payment_url' => $paymentURL
         ];
 
         cryptAPI::addPaymentResponse($orderId, json_encode($paymentData));
@@ -111,6 +114,13 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
             'params' => $_REQUEST,
         ]);
 
-        Tools::redirectLink(_PS_BASE_URL_ . __PS_BASE_URI__ . 'module/cryptapi/success?order_id=' . $this->module->currentOrder . '&nonce=' . $nonce);
+        cryptapi::sendMail($orderId);
+
+        Tools::redirectLink($paymentURL);
+    }
+
+    private function getSession()
+    {
+        return \PrestaShop\PrestaShop\Adapter\SymfonyContainer::getInstance()->get('session');
     }
 }

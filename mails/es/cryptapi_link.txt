@@ -1,0 +1,11 @@
+{shop_url}
+
+Hola {firstname} {lastname},
+
+El pedido {order} se creó con éxito y se generó una dirección de pago para la criptomoneda {coin}.
+
+Para completar su pedido o verificar el estado del pago, use el botón que se proporciona a continuación:
+
+[Pagar Ahora]({url})
+
+[{shop_name}]({shop_url})

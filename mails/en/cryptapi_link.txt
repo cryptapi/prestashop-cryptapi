@@ -1,0 +1,11 @@
+{shop_url}
+
+Hello {firstname} {lastname},
+
+Order {order} was created successfully and a payment address was generated for the cryptocurrency {coin}.
+
+To complete your order or check payment status, use the button provided bellow:
+
+[Pay Now]({url})
+
+[{shop_name}]({shop_url})

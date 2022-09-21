@@ -23,6 +23,8 @@ class CryptAPIFeeModuleFrontController extends ModuleFrontController
         $selected = $_REQUEST['cryptapi_coin'];
 
         if ($selected === 'none') {
+            session_start();
+            $_SESSION['cryptapi_fee'] = round(CryptAPIHelper::sig_fig($feeOrder, 6), 2);
             die(json_encode([
                 'fee' => round(CryptAPIHelper::sig_fig($feeOrder, 6), 2) . ' ' . Currency::getDefaultCurrency()->symbol,
                 'total' => round(floatval(CryptAPIHelper::sig_fig($total + $feeOrder, 6)), 2) . ' ' . Currency::getDefaultCurrency()->symbol
@@ -34,6 +36,9 @@ class CryptAPIFeeModuleFrontController extends ModuleFrontController
 
             $feeOrder += (float)$est->{Currency::getDefaultCurrency()->iso_code};
         }
+        session_start();
+        $_SESSION['cryptapi_fee'] = round(CryptAPIHelper::sig_fig($feeOrder, 6), 2);
+
 
         die(json_encode([
             'fee' => round(CryptAPIHelper::sig_fig($feeOrder, 6), 2) . ' ' . Currency::getDefaultCurrency()->symbol,

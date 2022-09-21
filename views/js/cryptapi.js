@@ -69,7 +69,7 @@ function check_status() {
                     jQuery('.ca_qrcode.value').attr("src", "data:image/png;base64," + data.qr_code_value);
                 }
 
-                if (data.show_min_fee === '1') {
+                if (data.show_min_fee === 1) {
                     jQuery('.ca_notification_remaining').show();
                 } else {
                     jQuery('.ca_notification_remaining').hide();
@@ -79,7 +79,7 @@ function check_status() {
                     jQuery('.ca_notification_payment_received').show();
                     jQuery('.ca_notification_cancel').remove();
                     jQuery('.ca_time_refresh').remove();
-                    jQuery('.ca_notification_ammount').html(data.already_paid + ' ' + data.coin + ' (<strong>' + data.already_paid_fiat + ' ' + data.fiat_symbol + '<strong>)');
+                    jQuery('.ca_notification_amount').html(data.already_paid + ' ' + data.coin + ' (<strong>' + data.already_paid_fiat + ' ' + data.fiat_symbol + '<strong>)');
                 }
 
                 console.log(data);
