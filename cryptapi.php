@@ -43,6 +43,7 @@ class cryptapi extends PaymentModule
         $this->currencies = true;
         $this->currencies_mode = 'checkbox';
         $this->bootstrap = true;
+        $this->module_key = 'a410c2de952f0ad1dc7c5225f1d69ffd';
 
         parent::__construct();
 
