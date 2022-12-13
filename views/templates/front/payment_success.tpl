@@ -1,5 +1,21 @@
+{*
+ * 2022 CryptAPI
+ *
+ * NOTICE OF LICENSE
+ *
+ * This source file is subject to the Academic Free License (AFL 3.0)
+ * that is bundled with this package in the file LICENSE.txt.
+ * It is also available through the world-wide-web at this URL:
+ * http://opensource.org/licenses/afl-3.0.php
+ * If you did not receive a copy of the license and are unable to
+ * obtain it through the world-wide-web, please send an email
+ * to info@cryptapi.io so we can send you a copy immediately.
+ *
+ * @author CryptAPI <info@cryptapi.io>
+ * @copyright  2022 CryptAPI
+ * @license    http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
+*}
 {extends "$layout"}
-
 {block name="content"}
     <div class="ca_payment-panel {$color_scheme}">
         <div class="ca_payment_details">
@@ -100,7 +116,7 @@
                     <div class="ca_branding">
                         <a href="https://cryptapi.io/" target="_blank">
                             <span>Powered by</span>
-                            <img width="94" class="img-fluid" src="{$module_dir|escape:'htmlall':'UTF-8'}views/css/files/200_logo_ca.png" alt="Cryptapi Logo"/>
+                            <img width="94" class="img-fluid" src="{$module_dir|escape:'htmlall':'UTF-8'}views/img/200_logo_ca.png" alt="Cryptapi Logo"/>
                         </a>
                     </div>
                 {/if}

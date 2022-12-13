@@ -1,30 +1,21 @@
 <?php
-/*
-* 2007-2015 PrestaShop
-*
-* NOTICE OF LICENSE
-*
-* This source file is subject to the Academic Free License (AFL 3.0)
-* that is bundled with this package in the file LICENSE.txt.
-* It is also available through the world-wide-web at this URL:
-* http://opensource.org/licenses/afl-3.0.php
-* If you did not receive a copy of the license and are unable to
-* obtain it through the world-wide-web, please send an email
-* to license@prestashop.com so we can send you a copy immediately.
-*
-* DISCLAIMER
-*
-* Do not edit or add to this file if you wish to upgrade PrestaShop to newer
-* versions in the future. If you wish to customize PrestaShop for your
-* needs please refer to http://www.prestashop.com for more information.
-*
-*  @author PrestaShop SA <contact@prestashop.com>
-*  @copyright  2007-2015 PrestaShop SA
-*  @license    http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
-*  International Registered Trademark & Property of PrestaShop SA
-*/
-
-
+/**
+ * 2022 CryptAPI
+ *
+ * NOTICE OF LICENSE
+ *
+ * This source file is subject to the Academic Free License (AFL 3.0)
+ * that is bundled with this package in the file LICENSE.txt.
+ * It is also available through the world-wide-web at this URL:
+ * http://opensource.org/licenses/afl-3.0.php
+ * If you did not receive a copy of the license and are unable to
+ * obtain it through the world-wide-web, please send an email
+ * to info@cryptapi.io so we can send you a copy immediately.
+ *
+ * @author CryptAPI <info@cryptapi.io>
+ * @copyright  2022 CryptAPI
+ * @license    http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
+ */
 if (!defined('_PS_VERSION_')) {
     exit;
 }
@@ -32,28 +23,25 @@ if (!defined('_PS_VERSION_')) {
 class cryptapi extends PaymentModule
 {
     protected $_html = '';
-    protected $_postErrors = array();
+    protected $_postErrors = [];
 
     public $details;
     public $owner;
     public $address;
     public $extra_mail_vars;
 
-    const CRYPTAPI_WAITING = 'CRYPTAPI_WAITING';
+    public const CRYPTAPI_WAITING = 'CRYPTAPI_WAITING';
 
     public function __construct()
     {
         $this->name = 'cryptapi';
         $this->tab = 'payments_gateways';
         $this->version = '1.1.0';
-        $this->ps_versions_compliancy = array('min' => '1.7', 'max' => '1.7.9.99');
+        $this->ps_versions_compliancy = ['min' => '1.7', 'max' => '1.7.9.99'];
         $this->author = 'CryptAPI';
-        $this->controllers = array('state', 'validation', 'callback', 'success', 'cronjob', 'fee');
-        $this->is_eu_compatible = 1;
-
+        $this->controllers = ['state', 'validation', 'callback', 'success', 'cronjob', 'fee'];
         $this->currencies = true;
         $this->currencies_mode = 'checkbox';
-
         $this->bootstrap = true;
 
         parent::__construct();
@@ -71,7 +59,6 @@ class cryptapi extends PaymentModule
 
     public function install()
     {
-
         $db = Db::getInstance();
         if (!parent::install() ||
             !$this->registerHook('paymentOptions') ||
@@ -87,14 +74,14 @@ class cryptapi extends PaymentModule
             return false;
         }
 
-        $db->Execute("CREATE TABLE IF NOT EXISTS `" . _DB_PREFIX_ . "cryptapi_order`(
+        $db->Execute('CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'cryptapi_order`(
         `order_id` INT NOT NULL,
         `response` TEXT
-        )");
+        )');
 
-        $db->Execute("CREATE TABLE IF NOT EXISTS `" . _DB_PREFIX_ . "cryptapi_coins`(
+        $db->Execute('CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'cryptapi_coins`(
         `id` int NOT NULL PRIMARY KEY,
-        `coins` TEXT )");
+        `coins` TEXT )');
 
         return true;
     }
@@ -107,7 +94,8 @@ class cryptapi extends PaymentModule
         $this->unregisterHook('displayAdminOrderTabOrder') &&
         $this->unregisterHook('displayAdminOrderTabLink') &&
         $this->unregisterHook('displayAdminOrderTabContent') &&
-        Configuration::updateValue('active', 0);
+        Configuration::updateValue('cryptapi_active', 0);
+
         return true;
     }
 
@@ -117,47 +105,52 @@ class cryptapi extends PaymentModule
 
         if (Tools::isSubmit('submit' . $this->name)) {
             $db = Db::getInstance();
-            $save_coins = array();
+            $save_coins = [];
 
-            $active = (string)Tools::getValue('active');
-            $title = (string)Tools::getValue('checkout_title');
-            $api_key = (string)Tools::getValue('api_key');
-            $show_branding = (string)Tools::getValue('show_branding');
-            $add_blockchain_fee = (string)Tools::getValue('add_blockchain_fee');
-            $fee_order_percentage = (string)Tools::getValue('fee_order_percentage');
-            $qrcode_default = (string)Tools::getValue('qrcode_default');
-            $qrcode_setting = (string)Tools::getValue('qrcode_setting');
-            $color_scheme = (string)Tools::getValue('color_scheme');
-            $disable_conversion = (string)Tools::getValue('disable_conversion');
-            $qrcode_size = (string)Tools::getValue('qrcode_size');
-            $coins_cache = (string)Tools::getValue('coins_cache');
-            $refresh_value_interval = (string)Tools::getValue('refresh_value_interval');
-            $order_cancelation_timeout = (string)Tools::getValue('order_cancelation_timeout');
-            $cronjob_nonce = Tools::getValue('cronjob_nonce');
-            $coins = Tools::getValue('coins');
+            $active = (string) Tools::getValue('cryptapi_active');
+            $title = (string) Tools::getValue('cryptapi_checkout_title');
+            $api_key = (string) Tools::getValue('cryptapi_api_key');
+            $show_branding = (string) Tools::getValue('cryptapi_show_branding');
+            $add_blockchain_fee = (string) Tools::getValue('cryptapi_add_blockchain_fee');
+            $fee_order_percentage = (string) Tools::getValue('cryptapi_fee_order_percentage');
+            $qrcode_default = (string) Tools::getValue('cryptapi_qrcode_default');
+            $qrcode_setting = (string) Tools::getValue('cryptapi_qrcode_setting');
+            $color_scheme = (string) Tools::getValue('cryptapi_color_scheme');
+            $disable_conversion = (string) Tools::getValue('cryptapi_disable_conversion');
+            $qrcode_size = (string) Tools::getValue('cryptapi_qrcode_size');
+            $coins_cache = (string) Tools::getValue('cryptapi_coins_cache');
+            $refresh_value_interval = (string) Tools::getValue('cryptapi_refresh_value_interval');
+            $order_cancelation_timeout = (string) Tools::getValue('cryptapi_order_cancelation_timeout');
+            $cronjob_nonce = Tools::getValue('cryptapi_cronjob_nonce');
+            $coins = Tools::getValue('cryptapi_coins');
 
             if (empty($title) || !Validate::isString($title)) {
                 $output = $this->displayError($this->l('Invalid Configuration value', '', 'en'));
+
                 return $output;
             }
 
             if (empty($coins_cache) || !Validate::isString($coins_cache)) {
                 $output = $this->displayError($this->l('Invalid Configuration value', '', 'en'));
+
                 return $output;
             }
 
             if (empty($qrcode_size) || !Validate::isInt($qrcode_size)) {
                 $output = $this->displayError($this->l('Invalid Configuration value. Qr Code Size must be a number.', '', 'en'));
+
                 return $output;
             }
 
             if (empty($coins)) {
                 $output = $this->displayError($this->l('Invalid Configuration value. Please select the cryptocurrencies you want to enable.', '', 'en'));
+
                 return $output;
             }
 
             if ($color_scheme != 'light' && $color_scheme != 'dark' && $color_scheme != 'auto') {
                 $output = $this->displayError($this->l('Invalid Configuration value', '', 'en'));
+
                 return $output;
             }
 
@@ -166,41 +159,40 @@ class cryptapi extends PaymentModule
             }
 
             foreach (json_decode($coins_cache) as $ticker => $coin) {
-
-                // Saving the currency to the dabatase ready to be used by the checkout form
-
-                $cryptocurrency_value = (string)Tools::getValue($ticker . '_address');
+                // Saving the currency to the database ready to be used by the checkout form
+                $cryptocurrency_value = (string) Tools::getValue('cryptapi_' . $ticker . '_address');
 
                 if (!empty($cryptocurrency_value) && !Validate::isString($cryptocurrency_value)) {
                     $output = $this->displayError($this->l('Invalid Cryptocurrency Address', '', 'en'));
+
                     return $output;
                 }
 
-                Configuration::updateValue($ticker . '_address', $cryptocurrency_value);
+                Configuration::updateValue('cryptapi_' . $ticker . '_address', $cryptocurrency_value);
             }
 
             // Update the database table with the selected currencies. If row doesn't exist, create new
-            if (empty($db->getRow("SELECT * FROM `" . _DB_PREFIX_ . "cryptapi_coins` WHERE id=1"))) {
-                $db->Execute("INSERT INTO `" . _DB_PREFIX_ . "cryptapi_coins` (`id`, `coins`) VALUES (1, '" . json_encode($save_coins) . "')");
+            if (empty($db->getRow('SELECT * FROM `' . _DB_PREFIX_ . 'cryptapi_coins` WHERE id=1'))) {
+                $db->Execute('INSERT INTO `' . _DB_PREFIX_ . "cryptapi_coins` (`id`, `coins`) VALUES (1, '" . json_encode($save_coins) . "')");
             } else {
-                $db->Execute("UPDATE `" . _DB_PREFIX_ . "cryptapi_coins` SET coins='" . json_encode($save_coins) . "' WHERE id=1");
+                $db->Execute('UPDATE `' . _DB_PREFIX_ . "cryptapi_coins` SET coins='" . json_encode($save_coins) . "' WHERE id=1");
             }
 
-            Configuration::updateValue('active', $active);
-            Configuration::updateValue('checkout_title', $title);
-            Configuration::updateValue('api_key', $api_key);
-            Configuration::updateValue('add_blockchain_fee', $add_blockchain_fee);
-            Configuration::updateValue('fee_order_percentage', $fee_order_percentage);
-            Configuration::updateValue('show_branding', $show_branding);
-            Configuration::updateValue('qrcode_default', $qrcode_default);
-            Configuration::updateValue('qrcode_setting', $qrcode_setting);
-            Configuration::updateValue('color_scheme', $color_scheme);
-            Configuration::updateValue('qrcode_size', $qrcode_size);
-            Configuration::updateValue('refresh_value_interval', $refresh_value_interval);
-            Configuration::updateValue('order_cancelation_timeout', $order_cancelation_timeout);
-            Configuration::updateValue('disable_conversion', $disable_conversion);
-            Configuration::updateValue('coins_cache', $coins_cache);
-            Configuration::updateValue('cronjob_nonce', $cronjob_nonce);
+            Configuration::updateValue('cryptapi_active', $active);
+            Configuration::updateValue('cryptapi_checkout_title', $title);
+            Configuration::updateValue('cryptapi_api_key', $api_key);
+            Configuration::updateValue('cryptapi_add_blockchain_fee', $add_blockchain_fee);
+            Configuration::updateValue('cryptapi_fee_order_percentage', $fee_order_percentage);
+            Configuration::updateValue('cryptapi_show_branding', $show_branding);
+            Configuration::updateValue('cryptapi_qrcode_default', $qrcode_default);
+            Configuration::updateValue('cryptapi_qrcode_setting', $qrcode_setting);
+            Configuration::updateValue('cryptapi_color_scheme', $color_scheme);
+            Configuration::updateValue('cryptapi_qrcode_size', $qrcode_size);
+            Configuration::updateValue('cryptapi_refresh_value_interval', $refresh_value_interval);
+            Configuration::updateValue('cryptapi_order_cancelation_timeout', $order_cancelation_timeout);
+            Configuration::updateValue('cryptapi_disable_conversion', $disable_conversion);
+            Configuration::updateValue('cryptapi_coins_cache', $coins_cache);
+            Configuration::updateValue('cryptapi_cronjob_nonce', $cronjob_nonce);
             $output = $this->displayConfirmation($this->l('Settings updated', '', 'en'));
         }
 
@@ -213,454 +205,452 @@ class cryptapi extends PaymentModule
         $db = Db::getInstance();
 
         $cryptocurrencies_api = CryptAPIHelper::get_supported_coins();
-        $cryptocurrencies = array();
+        $cryptocurrencies = [];
 
         foreach ($cryptocurrencies_api as $ticker => $coin) {
-            $cryptocurrencies[] = array(
+            $cryptocurrencies[] = [
                 'id_option' => $ticker,
                 'name' => $coin,
-            );
+            ];
         }
 
-        $default_nonce = empty(Tools::getValue('cronjob_nonce', Configuration::get('cronjob_nonce'))) ? cryptapi::generateNonce() : Tools::getValue('cronjob_nonce', Configuration::get('cronjob_nonce'));
+        $default_nonce = empty(Tools::getValue('cryptapi_cronjob_nonce', Configuration::get('cryptapi_cronjob_nonce'))) ? cryptapi::generateNonce() : Tools::getValue('cryptapi_cronjob_nonce', Configuration::get('cryptapi_cronjob_nonce'));
 
-        $form = array(
-            'form' => array(
-                'legend' => array(
+        $form = [
+            'form' => [
+                'legend' => [
                     'title' => $this->l('Settings', '', 'en'),
-                ),
-                'input' => array(
-                    array(
+                ],
+                'input' => [
+                    [
                         'type' => 'select',
                         'label' => $this->l('Activate:', '', 'en'),
                         'desc' => $this->l('This enables CryptAPI Payment Gateway', '', 'en'),
-                        'name' => 'active',
+                        'name' => 'cryptapi_active',
                         'required' => true,
-                        'options' => array(
-                            'query' => array(
-                                array(
+                        'options' => [
+                            'query' => [
+                                [
                                     'id_option' => 0,
-                                    'name' => $this->trans('No', [], 'Admin.Global')
-                                ),
-                                array(
+                                    'name' => $this->trans('No', [], 'Admin.Global'),
+                                ],
+                                [
                                     'id_option' => 1,
-                                    'name' => $this->trans('Yes', [], 'Admin.Global')
-                                ),
-                            ),
+                                    'name' => $this->trans('Yes', [], 'Admin.Global'),
+                                ],
+                            ],
                             'id' => 'id_option',
                             'name' => 'name',
-                        )
-                    ),
-                    array(
+                        ],
+                    ],
+                    [
                         'type' => 'text',
                         'label' => $this->l('Title', '', 'en'),
-                        'name' => 'checkout_title',
+                        'name' => 'cryptapi_checkout_title',
                         'size' => 20,
                         'required' => true,
-                    ),
-                    array(
+                    ],
+                    [
                         'type' => 'select',
                         'label' => $this->l('Add the blockchain fee to the order:', '', 'en'),
                         'desc' => $this->l('This will add an estimation of the blockchain fee to the order value', '', 'en'),
-                        'name' => 'add_blockchain_fee',
-                        'options' => array(
-                            'query' => array(
-                                array(
+                        'name' => 'cryptapi_add_blockchain_fee',
+                        'options' => [
+                            'query' => [
+                                [
                                     'id_option' => 0,
-                                    'name' => $this->trans('No', [], 'Admin.Global')
-                                ),
-                                array(
+                                    'name' => $this->trans('No', [], 'Admin.Global'),
+                                ],
+                                [
                                     'id_option' => 1,
-                                    'name' => $this->trans('Yes', [], 'Admin.Global')
-                                ),
-                            ),
+                                    'name' => $this->trans('Yes', [], 'Admin.Global'),
+                                ],
+                            ],
                             'id' => 'id_option',
                             'name' => 'name',
-                        )
-                    ),
-                    array(
+                        ],
+                    ],
+                    [
                         'type' => 'select',
-                        'label' => $this->l('Service fee manager:','', 'en'),
-                        // 'desc' => $this->l('This will add an estimation of the blockchain fee to the order value'),
-                        'name' => 'fee_order_percentage',
-                        'options' => array(
-                            'query' => array(
-                                array(
+                        'label' => $this->l('Service fee manager:', '', 'en'),
+                        'name' => 'cryptapi_fee_order_percentage',
+                        'options' => [
+                            'query' => [
+                                [
                                     'id_option' => '0.05',
-                                    'name' => '5%'
-                                ),
-                                array(
+                                    'name' => '5%',
+                                ],
+                                [
                                     'id_option' => '0.048',
-                                    'name' => '4.8%'
-                                ),
-                                array(
+                                    'name' => '4.8%',
+                                ],
+                                [
                                     'id_option' => '0.045',
-                                    'name' => '4.5%'
-                                ),
-                                array(
+                                    'name' => '4.5%',
+                                ],
+                                [
                                     'id_option' => '0.045',
-                                    'name' => '4.5%'
-                                ),
-                                array(
+                                    'name' => '4.5%',
+                                ],
+                                [
                                     'id_option' => '0.042',
-                                    'name' => '4.2%'
-                                ),
-                                array(
+                                    'name' => '4.2%',
+                                ],
+                                [
                                     'id_option' => '0.04',
-                                    'name' => '4%'
-                                ),
-                                array(
+                                    'name' => '4%',
+                                ],
+                                [
                                     'id_option' => '0.038',
-                                    'name' => '3.8%'
-                                ),
-                                array(
+                                    'name' => '3.8%',
+                                ],
+                                [
                                     'id_option' => '0.035',
-                                    'name' => '3.5%'
-                                ),
-                                array(
+                                    'name' => '3.5%',
+                                ],
+                                [
                                     'id_option' => '0.032',
-                                    'name' => '3.2%'
-                                ),
-                                array(
+                                    'name' => '3.2%',
+                                ],
+                                [
                                     'id_option' => '0.03',
-                                    'name' => '3%'
-                                ),
-                                array(
+                                    'name' => '3%',
+                                ],
+                                [
                                     'id_option' => '0.028',
-                                    'name' => '2.8%'
-                                ),
-                                array(
+                                    'name' => '2.8%',
+                                ],
+                                [
                                     'id_option' => '0.025',
-                                    'name' => '2.5%'
-                                ),
-                                array(
+                                    'name' => '2.5%',
+                                ],
+                                [
                                     'id_option' => '0.022',
-                                    'name' => '2.2%'
-                                ),
-                                array(
+                                    'name' => '2.2%',
+                                ],
+                                [
                                     'id_option' => '0.02',
-                                    'name' => '2%'
-                                ),
-                                array(
+                                    'name' => '2%',
+                                ],
+                                [
                                     'id_option' => '0.018',
-                                    'name' => '1.8%'
-                                ),
-                                array(
+                                    'name' => '1.8%',
+                                ],
+                                [
                                     'id_option' => '0.015',
-                                    'name' => '1.5%'
-                                ),
-                                array(
+                                    'name' => '1.5%',
+                                ],
+                                [
                                     'id_option' => '0.012',
-                                    'name' => '1.2%'
-                                ),
-                                array(
+                                    'name' => '1.2%',
+                                ],
+                                [
                                     'id_option' => '0.01',
-                                    'name' => '1%'
-                                ),
-                                array(
+                                    'name' => '1%',
+                                ],
+                                [
                                     'id_option' => '0.0090',
-                                    'name' => '0.90%'
-                                ),
-                                array(
+                                    'name' => '0.90%',
+                                ],
+                                [
                                     'id_option' => '0.0085',
-                                    'name' => '0.85%'
-                                ),
-                                array(
+                                    'name' => '0.85%',
+                                ],
+                                [
                                     'id_option' => '0.0080',
-                                    'name' => '0.80%'
-                                ),
-                                array(
+                                    'name' => '0.80%',
+                                ],
+                                [
                                     'id_option' => '0.0075',
-                                    'name' => '0.75%'
-                                ),
-                                array(
+                                    'name' => '0.75%',
+                                ],
+                                [
                                     'id_option' => '0.0070',
-                                    'name' => '0.70%'
-                                ),
-                                array(
+                                    'name' => '0.70%',
+                                ],
+                                [
                                     'id_option' => '0.0065',
-                                    'name' => '0.65%'
-                                ),
-                                array(
+                                    'name' => '0.65%',
+                                ],
+                                [
                                     'id_option' => '0.0060',
-                                    'name' => '0.60%'
-                                ),
-                                array(
+                                    'name' => '0.60%',
+                                ],
+                                [
                                     'id_option' => '0.0055',
-                                    'name' => '0.55%'
-                                ),
-                                array(
+                                    'name' => '0.55%',
+                                ],
+                                [
                                     'id_option' => '0.0050',
-                                    'name' => '0.50%'
-                                ),
-                                array(
+                                    'name' => '0.50%',
+                                ],
+                                [
                                     'id_option' => '0.0040',
-                                    'name' => '0.40%'
-                                ),
-                                array(
+                                    'name' => '0.40%',
+                                ],
+                                [
                                     'id_option' => '0.0030',
-                                    'name' => '0.30%'
-                                ),
-                                array(
+                                    'name' => '0.30%',
+                                ],
+                                [
                                     'id_option' => '0.0025',
-                                    'name' => '0.25%'
-                                ),
-                                array(
+                                    'name' => '0.25%',
+                                ],
+                                [
                                     'id_option' => '0',
-                                    'name' => '0%'
-                                ),
-                            ),
+                                    'name' => '0%',
+                                ],
+                            ],
                             'id' => 'id_option',
                             'name' => 'name',
-                        )
-                    ),
-                    array(
+                        ],
+                    ],
+                    [
                         'type' => 'select',
                         'label' => $this->l('Show CryptAPI branding:', '', 'en'),
                         'desc' => $this->l('Show CryptAPI logo and credits below the QR code', '', 'en'),
-                        'name' => 'show_branding',
-                        'options' => array(
-                            'query' => array(
-                                array(
+                        'name' => 'cryptapi_show_branding',
+                        'options' => [
+                            'query' => [
+                                [
                                     'id_option' => 1,
-                                    'name' => $this->trans('Yes', [], 'Admin.Global')
-                                ),
-                                array(
+                                    'name' => $this->trans('Yes', [], 'Admin.Global'),
+                                ],
+                                [
                                     'id_option' => 0,
-                                    'name' => $this->trans('No', [], 'Admin.Global')
-                                ),
-                            ),
+                                    'name' => $this->trans('No', [], 'Admin.Global'),
+                                ],
+                            ],
                             'id' => 'id_option',
                             'name' => 'name',
-                        )
-                    ),
-                    array(
+                        ],
+                    ],
+                    [
                         'type' => 'select',
                         'label' => $this->l('QR Code to show:', '', 'en'),
-                        'name' => 'qrcode_setting',
-                        'options' => array(
-                            'query' => array(
-                                array(
+                        'name' => 'cryptapi_qrcode_setting',
+                        'options' => [
+                            'query' => [
+                                [
                                     'id_option' => 'without_amount',
-                                    'name' => 'Default Without Amount'
-                                ),
-                                array(
+                                    'name' => 'Default Without Amount',
+                                ],
+                                [
                                     'id_option' => 'amount',
-                                    'name' => 'Default Amount'
-                                ),
-                                array(
+                                    'name' => 'Default Amount',
+                                ],
+                                [
                                     'id_option' => 'hide_without_amount',
-                                    'name' => 'Hide Without Amount'
-                                ),
-                                array(
+                                    'name' => 'Hide Without Amount',
+                                ],
+                                [
                                     'id_option' => 'hide_amount',
-                                    'name' => 'Hide Amount'
-                                ),
-                            ),
+                                    'name' => 'Hide Amount',
+                                ],
+                            ],
                             'id' => 'id_option',
                             'name' => 'name',
-                        )
-                    ),
-                    array(
+                        ],
+                    ],
+                    [
                         'type' => 'select',
                         'label' => $this->l('QR Code by default:', '', 'en'),
                         'desc' => $this->l('Show the QR Code by default', '', 'en'),
-                        'name' => 'qrcode_default',
-                        'options' => array(
-                            'query' => array(
-                                array(
+                        'name' => 'cryptapi_qrcode_default',
+                        'options' => [
+                            'query' => [
+                                [
                                     'id_option' => 1,
-                                    'name' => $this->trans('Yes', [], 'Admin.Global')
-                                ),
-                                array(
+                                    'name' => $this->trans('Yes', [], 'Admin.Global'),
+                                ],
+                                [
                                     'id_option' => 0,
-                                    'name' => $this->trans('No', [], 'Admin.Global')
-                                ),
-                            ),
+                                    'name' => $this->trans('No', [], 'Admin.Global'),
+                                ],
+                            ],
                             'id' => 'id_option',
                             'name' => 'name',
-                        )
-                    ),
-                    array(
+                        ],
+                    ],
+                    [
                         'type' => 'text',
                         'label' => $this->l('QR Code size', '', 'en'),
-                        'name' => 'qrcode_size',
+                        'name' => 'cryptapi_qrcode_size',
                         'required' => true,
-                    ),
-                    array(
+                    ],
+                    [
                         'type' => 'select',
                         'label' => $this->l('Color Scheme:', '', 'en'),
                         'desc' => $this->l('Selects the color scheme of the plugin to match your website (Light, Dark and Auto to automatically detect it)', '', 'en'),
                         'required' => true,
-                        'name' => 'color_scheme',
-                        'options' => array(
-                            'query' => array(
-                                array(
+                        'name' => 'cryptapi_color_scheme',
+                        'options' => [
+                            'query' => [
+                                [
                                     'id_option' => 'light',
-                                    'name' => $this->l('Light', '', 'en')
-                                ),
-                                array(
+                                    'name' => $this->l('Light', '', 'en'),
+                                ],
+                                [
                                     'id_option' => 'dark',
-                                    'name' => $this->l('Dark', '', 'en')
-                                ),
-                                array(
+                                    'name' => $this->l('Dark', '', 'en'),
+                                ],
+                                [
                                     'id_option' => 'auto',
-                                    'name' => 'Auto'
-                                ),
-                            ),
+                                    'name' => 'Auto',
+                                ],
+                            ],
                             'id' => 'id_option',
                             'name' => 'name',
-                        )
-                    ),
-                    array(
+                        ],
+                    ],
+                    [
                         'type' => 'select',
                         'label' => $this->l('Refresh converted value:', '', 'en'),
                         'desc' => sprintf($this->l('The system will automatically update the conversion value of the invoices (with real-time data), every X minutes. %1$s This feature is helpful whenever a customer takes long time to pay a generated invoice and the selected crypto a volatile coin/token (not stable coin). %1$s %2$s Warning: %3$s Setting this setting to none might create conversion issues, as we advise you to keep it at 5 minutes. %1$s %4$s Do not forget to set up the cronjob in your server %3$s', '', 'en'), '<br/>', '<strong style="color: #f44336;">', '</strong>', '<strong>'),
                         'required' => true,
-                        'name' => 'refresh_value_interval',
-                        'options' => array(
-                            'query' => array(
-                                array(
+                        'name' => 'cryptapi_refresh_value_interval',
+                        'options' => [
+                            'query' => [
+                                [
                                     'id_option' => '0',
-                                    'name' => $this->l('Never', '', 'en')
-                                ),
-                                array(
+                                    'name' => $this->l('Never', '', 'en'),
+                                ],
+                                [
                                     'id_option' => '300',
-                                    'name' => $this->l('Every 5 Minutes', '', 'en')
-                                ),
-                                array(
+                                    'name' => $this->l('Every 5 Minutes', '', 'en'),
+                                ],
+                                [
                                     'id_option' => '600',
-                                    'name' => $this->l('Every 10 Minutes', '', 'en')
-                                ),
-                                array(
+                                    'name' => $this->l('Every 10 Minutes', '', 'en'),
+                                ],
+                                [
                                     'id_option' => '900',
-                                    'name' => $this->l('Every 15 Minutes', '', 'en')
-                                ),
-                                array(
+                                    'name' => $this->l('Every 15 Minutes', '', 'en'),
+                                ],
+                                [
                                     'id_option' => '1800',
-                                    'name' => $this->l('Every 30 Minutes', '', 'en')
-                                ),
-                                array(
+                                    'name' => $this->l('Every 30 Minutes', '', 'en'),
+                                ],
+                                [
                                     'id_option' => '2700',
-                                    'name' => $this->l('Every 45 Minutes', '', 'en')
-                                ),
-                                array(
+                                    'name' => $this->l('Every 45 Minutes', '', 'en'),
+                                ],
+                                [
                                     'id_option' => '3600',
-                                    'name' => $this->l('Every 60 Minutes', '', 'en')
-                                ),
-                            ),
+                                    'name' => $this->l('Every 60 Minutes', '', 'en'),
+                                ],
+                            ],
                             'id' => 'id_option',
                             'name' => 'name',
-                        )
-                    ),
-                    array(
+                        ],
+                    ],
+                    [
                         'type' => 'select',
                         'label' => $this->l('Order cancelation timeout:', '', 'en'),
-                        'desc' =>  sprintf($this->l('Selects the amount of time the user has to pay for the order. %1$s When this time is over, order will be marked as "Canceled" and every paid value will be ignored. %1$s %2$s Notice: %3$s If the user still sends money to the generated address. Value will still be redirected to you.', '', 'en'),'<br/>', '<strong>', '</strong>'),
+                        'desc' => sprintf($this->l('Selects the amount of time the user has to pay for the order. %1$s When this time is over, order will be marked as "Canceled" and every paid value will be ignored. %1$s %2$s Notice: %3$s If the user still sends money to the generated address. Value will still be redirected to you.', '', 'en'), '<br/>', '<strong>', '</strong>'),
                         'required' => true,
-                        'name' => 'order_cancelation_timeout',
-                        'options' => array(
-                            'query' => array(
-                                array(
+                        'name' => 'cryptapi_order_cancelation_timeout',
+                        'options' => [
+                            'query' => [
+                                [
                                     'id_option' => '0',
-                                    'name' => $this->l('Never', '', 'en')
-                                ),
-                                array(
+                                    'name' => $this->l('Never', '', 'en'),
+                                ],
+                                [
                                     'id_option' => '3600',
-                                    'name' => $this->l('1 Hour', '', 'en')
-                                ),
-                                array(
+                                    'name' => $this->l('1 Hour', '', 'en'),
+                                ],
+                                [
                                     'id_option' => '21600',
-                                    'name' => $this->l('6 Hours', '', 'en')
-                                ),
-                                array(
+                                    'name' => $this->l('6 Hours', '', 'en'),
+                                ],
+                                [
                                     'id_option' => '43200',
-                                    'name' => $this->l('12 Hours', '', 'en')
-                                ),
-                                array(
+                                    'name' => $this->l('12 Hours', '', 'en'),
+                                ],
+                                [
                                     'id_option' => '64800',
-                                    'name' => $this->l('18 Hours', '', 'en')
-                                ),
-                                array(
+                                    'name' => $this->l('18 Hours', '', 'en'),
+                                ],
+                                [
                                     'id_option' => '86400',
-                                    'name' => $this->l('24 Hours', '', 'en')
-                                ),
-                            ),
+                                    'name' => $this->l('24 Hours', '', 'en'),
+                                ],
+                            ],
                             'id' => 'id_option',
                             'name' => 'name',
-                        )
-                    ),
-                    array(
+                        ],
+                    ],
+                    [
                         'type' => 'select',
                         'label' => $this->l('Disable price conversion:', '', 'en'),
                         'desc' => $this->l('Attention: This option will disable the price conversion for ALL cryptocurrencies! If you check this, pricing will not be converted from the currency of your shop to the cryptocurrency selected by the user, and users will be requested to pay the same value as shown on your shop, regardless of the cryptocurrency selected', '', 'en'),
-                        'name' => 'disable_conversion',
-                        'options' => array(
-                            'query' => array(
-                                array(
+                        'name' => 'cryptapi_disable_conversion',
+                        'options' => [
+                            'query' => [
+                                [
                                     'id_option' => 0,
-                                    'name' => $this->trans('No', [], 'Admin.Global')
-                                ),
-                                array(
+                                    'name' => $this->trans('No', [], 'Admin.Global'),
+                                ],
+                                [
                                     'id_option' => 1,
-                                    'name' => $this->trans('Yes', [], 'Admin.Global')
-                                ),
-                            ),
+                                    'name' => $this->trans('Yes', [], 'Admin.Global'),
+                                ],
+                            ],
                             'id' => 'id_option',
                             'name' => 'name',
-                        )
-                    ),
-                    array(
+                        ],
+                    ],
+                    [
                         'type' => 'text',
                         'label' => $this->l('API Keys', '', 'en'),
-                        'name' => 'api_key',
+                        'name' => 'cryptapi_api_key',
                         'size' => 100,
                         'required' => false,
                         'desc' => sprintf($this->l('Insert here your BlockBee API Key. You can get one here: %1$s. %2$sThis field is optional.%3$s', '', 'en'), '<a href="https://dash.blockbee.io/" target="_blank">https://dash.blockbee.io/</a>', '<strong>', '</strong>'),
-                    ),
-                    array(
+                    ],
+                    [
                         'type' => 'select',
                         'label' => $this->l('Select cryptocurrencies', '', 'en'),
                         'desc' => sprintf($this->l('Please select the cryptocurrencies you wish to enable. CTRL + Mouse click to select more than one. %1$s %1$s %2$sNotice: %3$sIf you are using BlockBee you can choose if setting the receiving addresses here bellow or in your BlockBee settings page. %1$s In order to set the addresses on plugin settings, you need to select “Address Override” while creating the API key. %1$s In order to set the addresses on BlockBee settings, you need to NOT select “Address Override” while creating the API key.', '', 'en'), '<br/>', '<strong>', '</strong>'),
-                        'name' => 'coins',
+                        'name' => 'cryptapi_coins',
                         'multiple' => true,
-                        'options' => array(
+                        'options' => [
                             'query' => $cryptocurrencies,
                             'id' => 'id_option',
                             'name' => 'name',
-                        ),
-                    ),
-                    array(
+                        ],
+                    ],
+                    [
                         'type' => 'hidden',
-                        'name' => 'coins_cache'
-                    ),
-                ),
-                'submit' => array(
+                        'name' => 'cryptapi_coins_cache',
+                    ],
+                ],
+                'submit' => [
                     'title' => $this->l('Save', '', 'en'),
                     'class' => 'btn btn-default pull-right',
-                ),
-            )
-        );
+                ],
+            ],
+        ];
 
         foreach ($cryptocurrencies_api as $ticker => $coin) {
-            $form['form']['input'][] = array(
+            $form['form']['input'][] = [
                 'type' => 'text',
                 'label' => $coin . ' Address',
-                'name' => $ticker . '_address',
+                'name' => 'cryptapi_' . $ticker . '_address',
                 'size' => 20,
-            );
+            ];
         }
 
-        $form['form']['input'][] = array(
+        $form['form']['input'][] = [
             'type' => 'text',
             'label' => $this->l('Cronjob Nonce', '', 'en'),
             'desc' => sprintf($this->l('Add this string to your cronjob URL when creating the cronjob in your system. %1$s The request should look like this: %2$s', '', 'en'), '<br/>', '<a href="' . _PS_BASE_URL_ . __PS_BASE_URI__ . 'module/cryptapi/cronjob?nonce=' . $default_nonce . '" target="_blank">' . _PS_BASE_URL_ . __PS_BASE_URI__ . 'module/cryptapi/cronjob?nonce=' . $default_nonce . '</a>'),
-            'name' => 'cronjob_nonce',
+            'name' => 'cryptapi_cronjob_nonce',
             'required' => true,
-        );
+        ];
 
         $helper = new HelperForm();
-
 
         // Module, token and currentIndex
         $helper->table = $this->table;
@@ -670,36 +660,36 @@ class cryptapi extends PaymentModule
         $helper->submit_action = 'submit' . $this->name;
 
         // Default language
-        $helper->default_form_language = (int)Configuration::get('PS_LANG_DEFAULT');
+        $helper->default_form_language = (int) Configuration::get('PS_LANG_DEFAULT');
 
         // Creating this array to preselect the currency
-        $coins_db = $db->getRow("SELECT * FROM `" . _DB_PREFIX_ . "cryptapi_coins` WHERE id=1");
+        $coins_db = $db->getRow('SELECT * FROM `' . _DB_PREFIX_ . 'cryptapi_coins` WHERE id=1');
 
         // Load current value into the form
-        $helper->fields_value['active'] = empty(Tools::getValue('active', Configuration::get('active'))) ? 0 : Tools::getValue('active', Configuration::get('active'));
-        $helper->fields_value['checkout_title'] = empty(Tools::getValue('checkout_title', Configuration::get('checkout_title'))) ? 'Cryptocurrency' : Tools::getValue('checkout_title', Configuration::get('checkout_title'));
-        $helper->fields_value['qrcode_size'] = empty(Tools::getValue('qrcode_size', Configuration::get('qrcode_size'))) ? '300' : Tools::getValue('qrcode_size', Configuration::get('qrcode_size'));
-        $helper->fields_value['api_key'] = Tools::getValue('api_key', Configuration::get('api_key'));
-        $helper->fields_value['add_blockchain_fee'] = empty(Tools::getValue('add_blockchain_fee', Configuration::get('add_blockchain_fee'))) ? 1 : Tools::getValue('add_blockchain_fee', Configuration::get('add_blockchain_fee'));
-        $helper->fields_value['fee_order_percentage'] = empty(Tools::getValue('fee_order_percentage', Configuration::get('fee_order_percentage'))) && Tools::getValue('fee_order_percentage', Configuration::get('fee_order_percentage')) !== 0 ? '0' : Tools::getValue('fee_order_percentage', Configuration::get('fee_order_percentage'));
-        $helper->fields_value['show_branding'] = empty(Tools::getValue('show_branding', Configuration::get('show_branding'))) ? 1 : Tools::getValue('show_branding', Configuration::get('show_branding'));
-        $helper->fields_value['qrcode_default'] = empty(Tools::getValue('qrcode_default', Configuration::get('qrcode_default'))) ? 1 : Tools::getValue('qrcode_default', Configuration::get('qrcode_default'));
-        $helper->fields_value['color_scheme'] = Tools::getValue('color_scheme', Configuration::get('color_scheme'));
-        $helper->fields_value['refresh_value_interval'] = empty(Tools::getValue('refresh_value_interval', Configuration::get('refresh_value_interval'))) && Tools::getValue('refresh_value_interval', Configuration::get('refresh_value_interval')) !== '0' ? '0' : Tools::getValue('refresh_value_interval', Configuration::get('refresh_value_interval'));
-        $helper->fields_value['order_cancelation_timeout'] = empty(Tools::getValue('order_cancelation_timeout', Configuration::get('order_cancelation_timeout'))) && Tools::getValue('order_cancelation_timeout', Configuration::get('order_cancelation_timeout')) !== '0' ? '0' : Tools::getValue('order_cancelation_timeout', Configuration::get('order_cancelation_timeout'));
-        $helper->fields_value['disable_conversion'] = Tools::getValue('disable_conversion', Configuration::get('disable_conversion'));
-        $helper->fields_value['qrcode_setting'] = Tools::getValue('qrcode_setting', Configuration::get('qrcode_setting'));
-        $helper->fields_value['coins_cache'] = json_encode($cryptocurrencies_api);
-        $helper->fields_value['cronjob_nonce'] = $default_nonce;
+        $helper->fields_value['cryptapi_active'] = empty(Tools::getValue('cryptapi_active', Configuration::get('cryptapi_active'))) ? 0 : Tools::getValue('cryptapi_active', Configuration::get('cryptapi_active'));
+        $helper->fields_value['cryptapi_checkout_title'] = empty(Tools::getValue('cryptapi_checkout_title', Configuration::get('cryptapi_checkout_title'))) ? 'Cryptocurrency' : Tools::getValue('cryptapi_checkout_title', Configuration::get('cryptapi_checkout_title'));
+        $helper->fields_value['cryptapi_qrcode_size'] = empty(Tools::getValue('cryptapi_qrcode_size', Configuration::get('cryptapi_qrcode_size'))) ? '300' : Tools::getValue('cryptapi_qrcode_size', Configuration::get('cryptapi_qrcode_size'));
+        $helper->fields_value['cryptapi_api_key'] = Tools::getValue('cryptapi_api_key', Configuration::get('cryptapi_api_key'));
+        $helper->fields_value['cryptapi_add_blockchain_fee'] = empty(Tools::getValue('cryptapi_add_blockchain_fee', Configuration::get('cryptapi_add_blockchain_fee'))) ? 1 : Tools::getValue('cryptapi_add_blockchain_fee', Configuration::get('cryptapi_add_blockchain_fee'));
+        $helper->fields_value['cryptapi_fee_order_percentage'] = empty(Tools::getValue('cryptapi_fee_order_percentage', Configuration::get('cryptapi_fee_order_percentage'))) && Tools::getValue('cryptapi_fee_order_percentage', Configuration::get('cryptapi_fee_order_percentage')) !== 0 ? '0' : Tools::getValue('cryptapi_fee_order_percentage', Configuration::get('cryptapi_fee_order_percentage'));
+        $helper->fields_value['cryptapi_show_branding'] = empty(Tools::getValue('cryptapi_show_branding', Configuration::get('cryptapi_show_branding'))) ? 1 : Tools::getValue('cryptapi_show_branding', Configuration::get('cryptapi_show_branding'));
+        $helper->fields_value['cryptapi_qrcode_default'] = empty(Tools::getValue('cryptapi_qrcode_default', Configuration::get('cryptapi_qrcode_default'))) ? 1 : Tools::getValue('cryptapi_qrcode_default', Configuration::get('cryptapi_qrcode_default'));
+        $helper->fields_value['cryptapi_color_scheme'] = Tools::getValue('cryptapi_color_scheme', Configuration::get('cryptapi_color_scheme'));
+        $helper->fields_value['cryptapi_refresh_value_interval'] = empty(Tools::getValue('cryptapi_refresh_value_interval', Configuration::get('cryptapi_refresh_value_interval'))) && Tools::getValue('cryptapi_refresh_value_interval', Configuration::get('cryptapi_refresh_value_interval')) !== '0' ? '0' : Tools::getValue('cryptapi_refresh_value_interval', Configuration::get('cryptapi_refresh_value_interval'));
+        $helper->fields_value['cryptapi_order_cancelation_timeout'] = empty(Tools::getValue('cryptapi_order_cancelation_timeout', Configuration::get('cryptapi_order_cancelation_timeout'))) && Tools::getValue('cryptapi_order_cancelation_timeout', Configuration::get('cryptapi_order_cancelation_timeout')) !== '0' ? '0' : Tools::getValue('cryptapi_order_cancelation_timeout', Configuration::get('cryptapi_order_cancelation_timeout'));
+        $helper->fields_value['cryptapi_disable_conversion'] = Tools::getValue('cryptapi_disable_conversion', Configuration::get('cryptapi_disable_conversion'));
+        $helper->fields_value['cryptapi_qrcode_setting'] = Tools::getValue('cryptapi_qrcode_setting', Configuration::get('cryptapi_qrcode_setting'));
+        $helper->fields_value['cryptapi_coins_cache'] = json_encode($cryptocurrencies_api);
+        $helper->fields_value['cryptapi_cronjob_nonce'] = $default_nonce;
 
         if (empty($coins_db)) {
-            $helper->fields_value['coins[]'] = '';
+            $helper->fields_value['cryptapi_coins[]'] = '';
         } else {
-            $helper->fields_value['coins[]'] = json_decode($coins_db['coins'], true);
+            $helper->fields_value['cryptapi_coins[]'] = json_decode($coins_db['coins'], true);
         }
 
         foreach ($cryptocurrencies_api as $ticker => $coin) {
-            $helper->fields_value[$ticker . '_address'] = Tools::getValue($ticker . '_address', Configuration::get($ticker . '_address'));
+            $helper->fields_value['cryptapi_' . $ticker . '_address'] = Tools::getValue('cryptapi_' . $ticker . '_address', Configuration::get('cryptapi_' . $ticker . '_address'));
         }
 
         return $helper->generateForm([$form]);
@@ -707,12 +697,11 @@ class cryptapi extends PaymentModule
 
     public function hookPaymentOptions($params)
     {
-
-        if (empty(Configuration::get('active'))) {
+        if (empty(Configuration::get('cryptapi_active'))) {
             return false;
         }
 
-        if (empty(json_decode(Db::getInstance()->getRow("SELECT * FROM `" . _DB_PREFIX_ . "cryptapi_coins` WHERE id=1")['coins'], true))) {
+        if (empty(json_decode(Db::getInstance()->getRow('SELECT * FROM `' . _DB_PREFIX_ . 'cryptapi_coins` WHERE id=1')['coins'], true))) {
             return false;
         }
 
@@ -739,33 +728,34 @@ class cryptapi extends PaymentModule
                 }
             }
         }
+
         return false;
     }
 
     public function getEmbeddedPaymentOption()
     {
-        if (!Configuration::get('active')) {
+        if (!Configuration::get('cryptapi_active')) {
             return false;
         }
-        $coins = array();
+        $coins = [];
 
-        $selected = json_decode(Db::getInstance()->getRow("SELECT * FROM `" . _DB_PREFIX_ . "cryptapi_coins` WHERE id=1")['coins'], true);
+        $selected = json_decode(Db::getInstance()->getRow('SELECT * FROM `' . _DB_PREFIX_ . 'cryptapi_coins` WHERE id=1')['coins'], true);
 
-        foreach (json_decode(Configuration::get('coins_cache'), true) as $ticker => $coin) {
+        foreach (json_decode(Configuration::get('cryptapi_coins_cache'), true) as $ticker => $coin) {
             foreach ($selected as $selected_coin) {
                 if ($ticker == $selected_coin) {
-                    if (!empty(Configuration::get($ticker . '_address')) || !empty(Configuration::get('api_key'))) {
-                        $coins[] = array(
+                    if (!empty(Configuration::get('cryptapi_' . $ticker . '_address')) || !empty(Configuration::get('cryptapi_api_key'))) {
+                        $coins[] = [
                             'ticker' => $ticker,
-                            'coin' => $coin
-                        );
+                            'coin' => $coin,
+                        ];
                     }
                 }
             }
         }
 
         $embeddedOption = new \PrestaShop\PrestaShop\Core\Payment\PaymentOption();
-        $embeddedOption->setCallToActionText(Configuration::get('checkout_title'))->setForm($this->generatePaymentForm($coins));
+        $embeddedOption->setCallToActionText(Configuration::get('cryptapi_checkout_title'))->setForm($this->generatePaymentForm($coins));
 
         return $embeddedOption;
     }
@@ -773,9 +763,9 @@ class cryptapi extends PaymentModule
     protected function generatePaymentForm($coins)
     {
         $this->context->smarty->assign([
-            'action' => $this->context->link->getModuleLink($this->name, 'validation', array(), true),
+            'action' => $this->context->link->getModuleLink($this->name, 'validation', [], true),
             'cryptocurrencies' => $coins,
-            'fee' => $this->context->link->getModuleLink($this->name, 'fee', array(), true),
+            'fee' => $this->context->link->getModuleLink($this->name, 'fee', [], true),
             'js_dir' => Media::getJSPath(_PS_MODULE_DIR_ . '/cryptapi/views/js/cryptapi_cart.js'),
         ]);
 
@@ -786,7 +776,7 @@ class cryptapi extends PaymentModule
     {
         if (!Configuration::get(self::CRYPTAPI_WAITING) || !Validate::isLoadedObject(new OrderState(Configuration::get(self::CRYPTAPI_WAITING)))) {
             $order_state = new OrderState();
-            $order_state->name = array();
+            $order_state->name = [];
             foreach (Language::getLanguages() as $language) {
                 switch (Tools::strtolower($language['iso_code'])) {
                     case 'fr':
@@ -819,13 +809,14 @@ class cryptapi extends PaymentModule
             $order_state->color = '#258ecd';
             $order_state->module_name = $this->name;
             if ($order_state->add()) {
-                $source = __DIR__ . '/cryptapi_payment.png';
-                $destination = _PS_ROOT_DIR_ . '/img/os/' . (int)$order_state->id . '.png';
+                $source = __DIR__ . '/views/img/cryptapi_payment.png';
+                $destination = _PS_ROOT_DIR_ . '/img/os/' . (int) $order_state->id . '.png';
                 copy($source, $destination);
             }
 
             Configuration::updateValue(self::CRYPTAPI_WAITING, $order_state->id);
         }
+
         return true;
     }
 
@@ -833,12 +824,12 @@ class cryptapi extends PaymentModule
     {
         $db = Db::getInstance();
 
-        $db->Execute("INSERT INTO `" . _DB_PREFIX_ . "cryptapi_order` (`order_id`, `response`) VALUES (" . $order_id . ", '" . $params . "')");
+        $db->Execute('INSERT INTO `' . _DB_PREFIX_ . 'cryptapi_order` (`order_id`, `response`) VALUES (' . $order_id . ", '" . $params . "')");
     }
 
     public static function getPaymentResponse($orderId)
     {
-        return Db::getInstance()->getRow("SELECT * FROM `" . _DB_PREFIX_ . "cryptapi_order` WHERE order_id=" . $orderId)['response'];
+        return Db::getInstance()->getRow('SELECT * FROM `' . _DB_PREFIX_ . 'cryptapi_order` WHERE order_id=' . $orderId)['response'];
     }
 
     public static function updatePaymentResponse($order_id, $param, $value)
@@ -850,7 +841,7 @@ class cryptapi extends PaymentModule
             $paymentData = json_encode($metaData);
 
             $db = Db::getInstance();
-            $db->Execute("UPDATE `" . _DB_PREFIX_ . "cryptapi_order` SET response='" . $paymentData . "' WHERE order_id=" . $order_id);
+            $db->Execute('UPDATE `' . _DB_PREFIX_ . "cryptapi_order` SET response='" . $paymentData . "' WHERE order_id=" . $order_id);
         }
     }
 
@@ -864,12 +855,11 @@ class cryptapi extends PaymentModule
 
     public static function cryptapiCronjob()
     {
+        $order_timeout = (int) Configuration::get('cryptapi_order_cancelation_timeout');
+        $value_refresh = (int) Configuration::get('cryptapi_refresh_value_interval');
 
-        $order_timeout = intval(Configuration::get('order_cancelation_timeout'));
-        $value_refresh = intval(Configuration::get('refresh_value_interval'));
-
-        if ((int)$order_timeout === 0 && (int)$value_refresh === 0) {
-            die();
+        if ((int) $order_timeout === 0 && (int) $value_refresh === 0) {
+            exit;
         }
 
         $orders = cryptapi::getAllOrders();
@@ -879,18 +869,17 @@ class cryptapi extends PaymentModule
 
             foreach ($orders as $order) {
                 $orderId = $order['id_order'];
-                $disableConversion = Configuration::get('disable_conversion');
-                $qrCodeSize = Configuration::get('qrcode_size');
+                $disableConversion = Configuration::get('cryptapi_disable_conversion');
+                $qrCodeSize = Configuration::get('cryptapi_qrcode_size');
 
                 $metaData = json_decode(cryptapi::getPaymentResponse($orderId), true);
 
                 if (!empty($metaData['cryptapi_last_price_update'])) {
-
                     $last_price_update = $metaData['cryptapi_last_price_update'];
 
                     $historyDb = $metaData['cryptapi_history'];
 
-                    $min_tx = floatval($metaData['cryptapi_min']);
+                    $min_tx = (float) $metaData['cryptapi_min'];
 
                     $calc = cryptapi::calcOrder($historyDb, $metaData['cryptapi_total'], $metaData['cryptapi_total_fiat']);
 
@@ -899,7 +888,6 @@ class cryptapi extends PaymentModule
                     $already_paid = $calc['already_paid'];
 
                     if ($value_refresh !== 0 && $last_price_update + $value_refresh <= time()) {
-
                         if ($remaining === $remaining_pending) {
                             $cryptapi_coin = $metaData['cryptapi_currency'];
 
@@ -928,15 +916,13 @@ class cryptapi extends PaymentModule
                     if ($order_timeout !== 0 && ($metaData['cryptapi_order_created'] + $order_timeout) <= time() && $already_paid <= 0) {
                         $history = new OrderHistory();
                         $history->id_order = $orderId;
-                        $history->changeIdOrderState((int)Configuration::get('PS_OS_CANCELED'), $history->id_order, false);
+                        $history->changeIdOrderState((int) Configuration::get('PS_OS_CANCELED'), $history->id_order, false);
                         $history->addWithemail();
                         $history->save();
                     }
-
                 }
             }
         }
-
     }
 
     public static function generateNonce($len = 32)
@@ -944,7 +930,7 @@ class cryptapi extends PaymentModule
         $data = str_split('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789');
 
         $nonce = [];
-        for ($i = 0; $i < $len; $i++) {
+        for ($i = 0; $i < $len; ++$i) {
             $nonce[] = $data[mt_rand(0, sizeof($data) - 1)];
         }
 
@@ -961,7 +947,7 @@ class cryptapi extends PaymentModule
 
         if (!empty($history)) {
             foreach ($history as $uuid => $item) {
-                if ((int)$item['pending'] === 0) {
+                if ((int) $item['pending'] === 0) {
                     $remaining = bcsub(CryptAPIHelper::sig_fig($remaining, 6), $item['value_paid'], 8);
                 }
 
@@ -974,17 +960,17 @@ class cryptapi extends PaymentModule
         }
 
         return [
-            'already_paid' => floatval($already_paid),
-            'already_paid_fiat' => floatval($already_paid_fiat),
-            'remaining' => floatval($remaining),
-            'remaining_pending' => floatval($remaining_pending),
-            'remaining_fiat' => floatval($remaining_fiat)
+            'already_paid' => (float) $already_paid,
+            'already_paid_fiat' => (float) $already_paid_fiat,
+            'remaining' => (float) $remaining,
+            'remaining_pending' => (float) $remaining_pending,
+            'remaining_fiat' => (float) $remaining_fiat,
         ];
     }
 
     public static function sendMail($orderId)
     {
-        $order = new Order((int)$orderId);
+        $order = new Order((int) $orderId);
         $customer = $order->getCustomer();
         $customerMail = $customer->email;
         $customerName = $customer->firstname . ' ' . $customer->lastname;
@@ -992,23 +978,23 @@ class cryptapi extends PaymentModule
         try {
             $metaData = json_decode(cryptapi::getPaymentResponse($orderId), true);
         } catch (Exception $e) {
-          return;
+            return;
         }
 
         Mail::Send(
-            (int)$order->id_lang,
+            (int) $order->id_lang,
             'cryptapi_link',
-            Translate::getModuleTranslation('cryptapi', 'New Order %1$s. Please send a %2$s payment', 'cryptapi',[
-                $order->reference, strtoupper($metaData['cryptapi_currency'])
+            Translate::getModuleTranslation('cryptapi', 'New Order %1$s. Please send a %2$s payment', 'cryptapi', [
+                $order->reference, strtoupper($metaData['cryptapi_currency']),
             ]),
-            array(
+            [
                 '{email}' => Configuration::get('PS_SHOP_EMAIL'),
                 '{firstname}' => $customer->firstname,
                 '{lastname}' => $customer->lastname,
                 '{order}' => $order->reference,
                 '{coin}' => strtoupper($metaData['cryptapi_currency']),
                 '{url}' => $metaData['cryptapi_payment_url'],
-            ),
+            ],
             $customerMail,
             $customerName,
             Configuration::get('PS_SHOP_EMAIL'),
@@ -1036,14 +1022,13 @@ class cryptapi extends PaymentModule
 
         unset($metaData['cryptapi_history']);
 
-        $this->context->smarty->assign(array(
+        $this->context->smarty->assign([
             'meta_data' => $metaData,
             'history' => $history,
-        ));
+        ]);
 
-        return $this->display(__FILE__, 'views/templates/back/payment_tab_content.tpl');
+        return $this->display(__FILE__, 'views/templates/admin/payment_tab_content.tpl');
     }
-
 
     public function hookDisplayAdminOrderTabOrder($params)
     {
@@ -1057,7 +1042,7 @@ class cryptapi extends PaymentModule
             return;
         }
 
-        return $this->display(__FILE__, 'views/templates/back/payment_tab.tpl');
+        return $this->display(__FILE__, 'views/templates/admin/payment_tab.tpl');
     }
 
     public function hookDisplayAdminOrderTabLink($params)

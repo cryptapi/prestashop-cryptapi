@@ -1,31 +1,24 @@
-{*q
-* 2007-2015 PrestaShop
-*
-* NOTICE OF LICENSE
-*
-* This source file is subject to the Academic Free License (AFL 3.0)
-* that is bundled with this package in the file LICENSE.txt.
-* It is also available through the world-wide-web at this URL:
-* http://opensource.org/licenses/afl-3.0.php
-* If you did not receive a copy of the license and are unable to
-* obtain it through the world-wide-web, please send an email
-* to license@prestashop.com so we can send you a copy immediately.
-*
-* DISCLAIMER
-*
-* Do not edit or add to this file if you wish to upgrade PrestaShop to newer
-* versions in the future. If you wish to customize PrestaShop for your
-* needs please refer to http://www.prestashop.com for more information.
-*
-*  @author PrestaShop SA <contact@prestashop.com>
-*  @copyright  2007-2015 PrestaShop SA
-*  @license    http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
-*  International Registered Trademark & Property of PrestaShop SA
+{*
+ * 2022 CryptAPI
+ *
+ * NOTICE OF LICENSE
+ *
+ * This source file is subject to the Academic Free License (AFL 3.0)
+ * that is bundled with this package in the file LICENSE.txt.
+ * It is also available through the world-wide-web at this URL:
+ * http://opensource.org/licenses/afl-3.0.php
+ * If you did not receive a copy of the license and are unable to
+ * obtain it through the world-wide-web, please send an email
+ * to info@cryptapi.io so we can send you a copy immediately.
+ *
+ * @author CryptAPI <info@cryptapi.io>
+ * @copyright  2022 CryptAPI
+ * @license    http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
 *}
 
 <form action="{$action}" id="payment-form">
     <p>
-        <select class="form-control form-control-select" id="coin" name="cryptapi_coin">
+        <select class="form-control form-control-select" id="cryptapi_coin" name="cryptapi_coin">
             <option value="none">{l s='Please select a cryptocurrency' mod='cryptapi'}</option>
             {foreach from=$cryptocurrencies key=myId item=i}
                 <option value="{$i.ticker}">{$i.coin}</option>
@@ -42,8 +35,8 @@
     </div>
 </form>
 <script>
-    const fee_url = '{$fee}'
-    document.getElementById('coin').addEventListener('change', function () {
+    const cryptapi_fee_url = '{$fee}'
+    document.getElementById('cryptapi_coin').addEventListener('change', function () {
         let val = this.value;
         const payment_fee = document.getElementById('cryptapi_fee');
         const buttonContainer = document.querySelector('.js-payment-confirmation');
@@ -51,7 +44,7 @@
 
         confirmButton.style.display = 'none';
 
-        fetch(fee_url + '?cryptapi_coin=' + val)
+        fetch(cryptapi_fee_url + '?cryptapi_coin=' + val)
             .then(function (response) {
                 return response.json();
             })

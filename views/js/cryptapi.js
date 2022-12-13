@@ -1,3 +1,20 @@
+/**
+ * 2022 CryptAPI
+ *
+ * NOTICE OF LICENSE
+ *
+ * This source file is subject to the Academic Free License (AFL 3.0)
+ * that is bundled with this package in the file LICENSE.txt.
+ * It is also available through the world-wide-web at this URL:
+ * http://opensource.org/licenses/afl-3.0.php
+ * If you did not receive a copy of the license and are unable to
+ * obtain it through the world-wide-web, please send an email
+ * to info@cryptapi.io so we can send you a copy immediately.
+ *
+ * @author CryptAPI <info@cryptapi.io>
+ * @copyright  2022 CryptAPI
+ * @license    http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
+ */
 function check_status() {
     let is_paid = false;
 
@@ -12,8 +29,7 @@ function check_status() {
             url: adminajax_link,
             data: {
                 ajax: true,
-                order_id: order_id,
-                nonce: nonce,
+                order_id: order_id
             },
 
             success: function (data) {
@@ -21,17 +37,15 @@ function check_status() {
                 let waiting_network = jQuery('.waiting_network');
                 let payment_done = jQuery('.payment_done');
 
-                console.log(data);
-
                 jQuery('.ca_value').html(data.remaining);
                 jQuery('.ca_fiat_total').html(data.fiat_remaining);
                 jQuery('.ca_copy.ca_details_copy').attr('data-tocopy', data.remaining);
 
                 if (data.canceled === 1) {
                     jQuery('.ca_loader').remove();
-                    jQuery('.ca_payments_wrapper').slideUp('400');
-                    jQuery('.ca_payment_cancelled').slideDown('400');
-                    jQuery('.ca_progress').slideUp('400');
+                    jQuery('.ca_payments_wrapper').slideUp('200');
+                    jQuery('.ca_payment_cancelled').slideDown('200');
+                    jQuery('.ca_progress').slideUp('200');
                     is_paid = true;
                 }
 
@@ -43,9 +57,9 @@ function check_status() {
                     jQuery('.ca_notification_cancel').remove();
 
                     setTimeout(function () {
-                        jQuery('.ca_payments_wrapper').slideUp('400');
-                        jQuery('.ca_payment_processing').slideDown('400');
-                    }, 5000);
+                        jQuery('.ca_payments_wrapper').slideUp('200');
+                        jQuery('.ca_payment_processing').slideDown('200');
+                    }, 300);
                 }
 
                 if (data.is_paid === 1) {
@@ -57,10 +71,10 @@ function check_status() {
                     jQuery('.ca_notification_cancel').remove();
 
                     setTimeout(function () {
-                        jQuery('.ca_payments_wrapper').slideUp('400');
-                        jQuery('.ca_payment_processing').slideUp('400');
-                        jQuery('.ca_payment_confirmed').slideDown('400');
-                    }, 5000);
+                        jQuery('.ca_payments_wrapper').slideUp('200');
+                        jQuery('.ca_payment_processing').slideUp('200');
+                        jQuery('.ca_payment_confirmed').slideDown('200');
+                    }, 300);
 
                     is_paid = true;
                 }
@@ -116,7 +130,7 @@ function check_status() {
                 }
             }
         });
-        setTimeout(status_loop, 5000);
+        setTimeout(status_loop, 2000);
     }
 
     status_loop();

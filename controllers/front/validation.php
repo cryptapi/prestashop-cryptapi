@@ -1,5 +1,21 @@
 <?php
-
+/**
+ * 2022 CryptAPI
+ *
+ * NOTICE OF LICENSE
+ *
+ * This source file is subject to the Academic Free License (AFL 3.0)
+ * that is bundled with this package in the file LICENSE.txt.
+ * It is also available through the world-wide-web at this URL:
+ * http://opensource.org/licenses/afl-3.0.php
+ * If you did not receive a copy of the license and are unable to
+ * obtain it through the world-wide-web, please send an email
+ * to info@cryptapi.io so we can send you a copy immediately.
+ *
+ * @author CryptAPI <info@cryptapi.io>
+ * @copyright  2022 CryptAPI
+ * @license    http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
+ */
 class CryptAPIValidationModuleFrontController extends ModuleFrontController
 {
     public function postProcess()
@@ -21,12 +37,12 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
         }
 
         if (!$authorized) {
-            die($this->module->l('This payment method is not available.', 'validation'));
+            exit($this->module->l('This payment method is not available.', 'validation'));
         }
 
         $selected = $_REQUEST['cryptapi_coin'];
         if ($selected == 'none') {
-            die($this->module->l('Please select a cryptocurrency.', 'validation'));
+            exit($this->module->l('Please select a cryptocurrency.', 'validation'));
         }
 
         $customer = new Customer($cart->id_customer);
@@ -34,45 +50,45 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
             Tools::redirect('index.php?controller=order&step=1');
         }
 
-        $addr = Configuration::get($selected . '_address');
+        $addr = Configuration::get('cryptapi_' . $selected . '_address');
 
+        $sessionFee = $this->context->cookie->blockbee_fee;
 
-        session_start();
-        $fee = $_SESSION['cryptapi_fee'];
+        $fee = !empty($sessionFee) ? $sessionFee : 0;
 
-        $total = (float)$cart->getOrderTotal(true, Cart::BOTH) + $fee;
+        $total = (float) $cart->getOrderTotal(true, Cart::BOTH) + $fee;
         $currency = $this->context->currency;
 
-        $disableConversion = Configuration::get('disable_conversion') === '0' ? false : true;
+        $disableConversion = Configuration::get('cryptapi_disable_conversion') === '0' ? false : true;
         $info = CryptAPIHelper::get_info($selected);
-        $minTx = floatval($info->minimum_transaction_coin);
+        $minTx = (float) $info->minimum_transaction_coin;
 
         $cryptoTotal = CryptAPIHelper::get_conversion($currency->iso_code, $selected, $total, $disableConversion);
 
         if ($cryptoTotal < $minTx) {
-            die($this->module->l('Value too low, minimum is.', 'validation')) . $minTx;
+            exit($this->module->l('Value too low, minimum is.', 'validation')) . $minTx;
         }
 
-        $apiKey = Configuration::get('api_key');
+        $apiKey = Configuration::get('cryptapi_api_key');
 
         if (empty($addr) && empty($apiKey)) {
-            die($this->module->l('There\'s was an error with this payment. Please try again.', 'validation'));
+            exit($this->module->l('There\'s was an error with this payment. Please try again.', 'validation'));
         }
 
         // Actually create order in prestashop
         $this->module->validateOrder(
-            (int)$cart->id,
-            (int)Configuration::get('CRYPTAPI_WAITING'),
+            (int) $cart->id,
+            (int) Configuration::get('CRYPTAPI_WAITING'),
             $total,
             $this->module->displayName,
-            NULL,
+            null,
             [],
-            (int)$currency->id,
+            (int) $currency->id,
             false,
             $customer->secure_key
         );
 
-        $qrCodeSize = Configuration::get('qrcode_size');
+        $qrCodeSize = Configuration::get('cryptapi_qrcode_size');
 
         $nonce = cryptapi::generateNonce();
         $orderId = $this->module->currentOrder;
@@ -85,12 +101,12 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
         $addressIn = $api->get_address();
 
         if (empty($addressIn)) {
-            die($this->module->l('There\'s was an error with this payment. Please try again.', 'validation'));
+            exit($this->module->l('There\'s was an error with this payment. Please try again.', 'validation'));
         }
 
         $qrCodeDataValue = $api->get_qrcode($cryptoTotal, $qrCodeSize);
         $qrCodeData = $api->get_qrcode('', $qrCodeSize);
-        $paymentURL = _PS_BASE_URL_ . __PS_BASE_URI__ . 'module/cryptapi/success?order_id=' . $this->module->currentOrder . '&nonce=' . $nonce;
+        $paymentURL = _PS_BASE_URL_ . __PS_BASE_URI__ . 'module/cryptapi/success?order_id=' . $this->module->currentOrder;
 
         $paymentData = [
             'cryptapi_nonce' => $nonce,
@@ -105,7 +121,7 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
             'cryptapi_fee' => $fee,
             'cryptapi_order_created' => time(),
             'cryptapi_history' => [],
-            'cryptapi_payment_url' => $paymentURL
+            'cryptapi_payment_url' => $paymentURL,
         ];
 
         cryptAPI::addPaymentResponse($orderId, json_encode($paymentData));
@@ -117,10 +133,5 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
         cryptapi::sendMail($orderId);
 
         Tools::redirectLink($paymentURL);
-    }
-
-    private function getSession()
-    {
-        return \PrestaShop\PrestaShop\Adapter\SymfonyContainer::getInstance()->get('session');
     }
 }

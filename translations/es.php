@@ -1,7 +1,7 @@
 <?php
 
 global $_MODULE;
-$_MODULE = array();
+$_MODULE = [];
 $_MODULE['<{cryptapi}prestashop>cryptapi_dfdc317312cace19ccef34f643b5a73c'] = 'CryptAPI Payment Gateway for PrestaShop	';
 $_MODULE['<{cryptapi}prestashop>cryptapi_602647c0ad09e510fab44b29d3768600'] = 'Acepte pagos en criptomonedas en su sitio web PrestaShop';
 $_MODULE['<{cryptapi}prestashop>cryptapi_876f23178c29dc2552c0b48bf23cd9bd'] = '¿Estás seguro/a  de que quieres desinstalar?';

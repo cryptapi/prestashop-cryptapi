@@ -1,9 +1,25 @@
 <?php
-
+/**
+ * 2022 CryptAPI
+ *
+ * NOTICE OF LICENSE
+ *
+ * This source file is subject to the Academic Free License (AFL 3.0)
+ * that is bundled with this package in the file LICENSE.txt.
+ * It is also available through the world-wide-web at this URL:
+ * http://opensource.org/licenses/afl-3.0.php
+ * If you did not receive a copy of the license and are unable to
+ * obtain it through the world-wide-web, please send an email
+ * to info@cryptapi.io so we can send you a copy immediately.
+ *
+ * @author CryptAPI <info@cryptapi.io>
+ * @copyright  2022 CryptAPI
+ * @license    http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
+ */
 class CryptAPIHelper
 {
-    private static $base_url = "https://api.cryptapi.io";
-    private static $pro_url = "https://api.blockbee.io";
+    private static $base_url = 'https://api.cryptapi.io';
+    private static $pro_url = 'https://api.blockbee.io';
     private $own_address = null;
     private $payment_address = null;
     private $callback_url = null;
@@ -52,7 +68,7 @@ class CryptAPIHelper
                 'address' => $this->own_address,
                 'pending' => $this->pending,
             ];
-        } elseif(!empty($api_key) && !empty($this->own_address)) {
+        } elseif (!empty($api_key) && !empty($this->own_address)) {
             $ca_params = [
                 'apikey' => $api_key,
                 'callback' => $callback_url,
@@ -74,8 +90,9 @@ class CryptAPIHelper
 
     public function checklogs()
     {
-
-        if (empty($this->coin) || empty($this->callback_url)) return null;
+        if (empty($this->coin) || empty($this->callback_url)) {
+            return null;
+        }
 
         $params = [
             'callback' => $this->callback_url,
@@ -92,7 +109,9 @@ class CryptAPIHelper
 
     public function get_qrcode($value, $size)
     {
-        if (empty($this->coin)) return null;
+        if (empty($this->coin)) {
+            return null;
+        }
 
         if (empty($value)) {
             $params = [
@@ -208,7 +227,9 @@ class CryptAPIHelper
         ];
 
         foreach ($_get as $k => $v) {
-            if (isset($params[$k])) continue;
+            if (isset($params[$k])) {
+                continue;
+            }
             $params[$k] = $_get[$k];
         }
 
@@ -221,7 +242,6 @@ class CryptAPIHelper
 
     public static function get_conversion($from, $to, $value, $disable_conversion)
     {
-
         if ($disable_conversion) {
             return $value;
         }
@@ -243,7 +263,6 @@ class CryptAPIHelper
 
     public static function get_estimate($coin)
     {
-
         $params = [
             'addresses' => 1,
             'priority' => 'default',
@@ -252,7 +271,6 @@ class CryptAPIHelper
         $response = CryptAPIHelper::_request($coin, 'estimate', $params);
 
         if ($response->status == 'success') {
-
             return $response->estimated_cost_currency;
         }
 
@@ -271,12 +289,12 @@ class CryptAPIHelper
 
         $answer = ($decimalPlaces > 0) ?
             number_format($value, $decimalPlaces, '.', '') : round($value, $decimalPlaces);
+
         return $answer;
     }
 
     private static function _request($coin, $endpoint, $params = [], $assoc = false)
     {
-
         $base_url = CryptAPIHelper::$base_url;
 
         if (!empty($params['apikey']) && $endpoint !== 'info') {
@@ -310,6 +328,7 @@ class CryptAPIHelper
 
         if (curl_error($curl)) {
             $json['error'] = 'ERROR: ' . curl_errno($curl) . '::' . curl_error($curl);
+
             return $json;
         } elseif ($response) {
             return json_decode($response, $assoc);

@@ -1,5 +1,4 @@
-<?php
-/**
+{*
  * 2022 CryptAPI
  *
  * NOTICE OF LICENSE
@@ -15,8 +14,5 @@
  * @author CryptAPI <info@cryptapi.io>
  * @copyright  2022 CryptAPI
  * @license    http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
- */
-function upgrade_module_1_1_0($module)
-{
-    return true;
-}
+*}
+*ok*
