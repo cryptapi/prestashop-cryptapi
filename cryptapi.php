@@ -20,10 +20,11 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
+require_once 'lib/CryptAPIHelper.php';
+
 class cryptapi extends PaymentModule
 {
     protected $_html = '';
-    protected $_postErrors = [];
 
     public $details;
     public $owner;
@@ -54,8 +55,6 @@ class cryptapi extends PaymentModule
         if (!count(Currency::checkPaymentCurrencies($this->id))) {
             $this->warning = $this->l('No currency has been set for this module.', '', 'en');
         }
-
-        require 'lib/CryptAPIHelper.php';
     }
 
     public function install()
