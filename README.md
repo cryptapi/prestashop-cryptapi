@@ -130,5 +130,8 @@ The easiest and fastest way is via our live chat on our [website](https://crypta
 * Minor bugfixes
 * Added translations for Portuguese, Spanish, Italian and French
 
+#### 1.1.1
+* Minor bugfixes
+
 ### Upgrade Notice
 * No breaking changes

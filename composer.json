@@ -3,7 +3,7 @@
   "description": "CryptAPI Payment Gateway",
   "homepage": "https://github.com/cryptapi/prestashop-cryptapi/",
   "license": "AFL-3.0",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "authors": [
     {
       "name": "cryptAPI",

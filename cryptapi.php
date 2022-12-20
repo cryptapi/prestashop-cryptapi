@@ -36,7 +36,7 @@ class cryptapi extends PaymentModule
     {
         $this->name = 'cryptapi';
         $this->tab = 'payments_gateways';
-        $this->version = '1.1.0';
+        $this->version = '1.1.1';
         $this->ps_versions_compliancy = ['min' => '1.7', 'max' => '1.7.9.99'];
         $this->author = 'CryptAPI';
         $this->controllers = ['state', 'validation', 'callback', 'success', 'cronjob', 'fee'];
@@ -174,9 +174,9 @@ class cryptapi extends PaymentModule
 
             // Update the database table with the selected currencies. If row doesn't exist, create new
             if (empty($db->getRow('SELECT * FROM `' . _DB_PREFIX_ . 'cryptapi_coins` WHERE id=1'))) {
-                $db->Execute('INSERT INTO `' . _DB_PREFIX_ . "cryptapi_coins` (`id`, `coins`) VALUES (1, '" . json_encode($save_coins) . "')");
+                $db->Execute('INSERT INTO `' . _DB_PREFIX_ . "cryptapi_coins` (`id`, `coins`) VALUES (1, '" . pSQL(json_encode($save_coins)) . "')");
             } else {
-                $db->Execute('UPDATE `' . _DB_PREFIX_ . "cryptapi_coins` SET coins='" . json_encode($save_coins) . "' WHERE id=1");
+                $db->Execute('UPDATE `' . _DB_PREFIX_ . "cryptapi_coins` SET coins='" . pSQL(json_encode($save_coins)) . "' WHERE id=1");
             }
 
             Configuration::updateValue('cryptapi_active', $active);
@@ -825,12 +825,12 @@ class cryptapi extends PaymentModule
     {
         $db = Db::getInstance();
 
-        $db->Execute('INSERT INTO `' . _DB_PREFIX_ . 'cryptapi_order` (`order_id`, `response`) VALUES (' . $order_id . ", '" . $params . "')");
+        $db->Execute('INSERT INTO `' . _DB_PREFIX_ . 'cryptapi_order` (`order_id`, `response`) VALUES (' . (int )$order_id . ", '" . pSQL($params) . "')");
     }
 
     public static function getPaymentResponse($orderId)
     {
-        return Db::getInstance()->getRow('SELECT * FROM `' . _DB_PREFIX_ . 'cryptapi_order` WHERE order_id=' . $orderId)['response'];
+        return Db::getInstance()->getRow('SELECT * FROM `' . _DB_PREFIX_ . 'cryptapi_order` WHERE order_id=' . (int) $orderId)['response'];
     }
 
     public static function updatePaymentResponse($order_id, $param, $value)
@@ -842,7 +842,7 @@ class cryptapi extends PaymentModule
             $paymentData = json_encode($metaData);
 
             $db = Db::getInstance();
-            $db->Execute('UPDATE `' . _DB_PREFIX_ . "cryptapi_order` SET response='" . $paymentData . "' WHERE order_id=" . $order_id);
+            $db->Execute('UPDATE `' . _DB_PREFIX_ . "cryptapi_order` SET response='" . pSQL($paymentData) . "' WHERE order_id=" . (int) $order_id);
         }
     }
 
