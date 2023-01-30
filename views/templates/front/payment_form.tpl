@@ -35,7 +35,8 @@
     </div>
 </form>
 <script>
-    const cryptapi_fee_url = '{$fee}'
+    const cryptapi_fee_url = new URL(window.location.protocol + '{url entity='module' name='cryptapi' controller='fee'}')
+
     document.getElementById('cryptapi_coin').addEventListener('change', function () {
         let val = this.value;
         const payment_fee = document.getElementById('cryptapi_fee');
@@ -43,19 +44,19 @@
         const confirmButton = buttonContainer.querySelector('.ps-shown-by-js');
 
         confirmButton.style.display = 'none';
-
-        fetch(cryptapi_fee_url + '?cryptapi_coin=' + val)
+        cryptapi_fee_url.searchParams.append('cryptapi_coin', val)
+        fetch(cryptapi_fee_url)
             .then(function (response) {
                 return response.json();
             })
             .then(function (data) {
                 confirmButton.style.display = 'block';
-                if (data.fee === 0) {
+                if (Number(data.fee) === 0) {
                     confirmButton.style.display = 'block';
                     return;
                 }
-                document.getElementById('cryptapi_payment_fee').innerHTML = data.fee;
-                document.getElementById('cryptapi_payment_total').innerHTML = data.total;
+                document.getElementById('cryptapi_payment_fee').innerHTML = data.fee + ' ' + data.simbCurrency;
+                document.getElementById('cryptapi_payment_total').innerHTML = data.total + ' ' + data.simbCurrency;
                 payment_fee.style.display = 'block';
             });
     });

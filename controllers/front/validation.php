@@ -41,7 +41,7 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
         }
 
         $selected = $_REQUEST['cryptapi_coin'];
-        if ($selected == 'none') {
+        if ($selected === 'none') {
             exit($this->module->l('Please select a cryptocurrency.', 'validation'));
         }
 
@@ -63,7 +63,7 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
         $info = CryptAPIHelper::get_info($selected);
         $minTx = (float) $info->minimum_transaction_coin;
 
-        $cryptoTotal = CryptAPIHelper::get_conversion($currency->iso_code, $selected, $total, $disableConversion);
+        $cryptoTotal = CryptAPIHelper::sig_fig(CryptAPIHelper::get_conversion($currency->iso_code, $selected, $total, $disableConversion), 6);
 
         if ($cryptoTotal < $minTx) {
             exit($this->module->l('Value too low, minimum is.', 'validation')) . $minTx;
@@ -97,7 +97,6 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
 
         $api = new CryptAPIHelper($selected, $addr, $apiKey, $callbackUrl, [], true);
 
-        // This gives error
         $addressIn = $api->get_address();
 
         if (empty($addressIn)) {
@@ -111,7 +110,7 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
         $paymentData = [
             'cryptapi_nonce' => $nonce,
             'cryptapi_address' => $addressIn,
-            'cryptapi_total' => CryptAPIHelper::sig_fig($cryptoTotal, 6),
+            'cryptapi_total' => $cryptoTotal,
             'cryptapi_total_fiat' => $total,
             'cryptapi_currency' => $selected,
             'cryptapi_qr_code_value' => $qrCodeDataValue['qr_code'],

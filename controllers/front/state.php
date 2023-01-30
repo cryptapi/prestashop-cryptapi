@@ -68,20 +68,25 @@ class CryptAPIStateModuleFrontController extends ModuleFrontController
             $showMinFee = 1;
         }
 
+        if ($paid) {
+            $remainingFiat = 0;
+            $remainingPending = 0;
+        }
+
         $params = [
             'is_paid' => $paid,
             'is_pending' => $cryptapiPending,
             'qr_code_value' => $metaData['cryptapi_qr_code_value'],
-            'canceled' => $order->getCurrentOrderState()->id === (int) Configuration::get('PS_OS_CANCELED') ? 1 : 0,
+            'canceled' => (int) $order->getCurrentOrderState()->id === (int) Configuration::get('PS_OS_CANCELED') ? 1 : 0,
             'coin' => strtoupper($metaData['cryptapi_currency']),
             'show_min_fee' => $showMinFee,
             'order_history' => $historyDb,
             'counter' => (string) $counterCalc,
             'crypto_total' => (float) $metaData['cryptapi_total'],
             'already_paid' => $alreadyPaid,
-            'remaining' => $remainingPending <= 0 ? 0 : $remainingPending,
-            'fiat_remaining' => $remainingFiat <= 0 ? 0 : round($remainingFiat, 2),
-            'already_paid_fiat' => (float) $alreadyPaidFiat <= 0 ? 0 : (float) $alreadyPaidFiat,
+            'remaining' => $remainingPending,
+            'fiat_remaining' => $remainingFiat,
+            'already_paid_fiat' => $alreadyPaidFiat,
             'fiat_symbol' => Currency::getDefaultCurrency()->symbol,
         ];
 

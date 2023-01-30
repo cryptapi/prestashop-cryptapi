@@ -22,12 +22,15 @@ class CryptAPIFeeModuleFrontController extends ModuleFrontController
     {
         require_once _PS_MODULE_DIR_ . 'cryptapi/lib/CryptAPIHelper.php';
 
-        $totalFee = Configuration::get('cryptapi_fee_order_percentage');
+        $totalFee = (float) Configuration::get('cryptapi_fee_order_percentage');
+        $blockchainFee = Configuration::get('cryptapi_add_blockchain_fee');
 
-        if (empty($totalFee)) {
+        if (empty($totalFee) && $blockchainFee !== '1') {
+            $this->context->cookie->cryptapi_fee = '';
             exit(json_encode([
                 'fee' => 0,
                 'total' => 0,
+                'simbCurrency' => Currency::getDefaultCurrency()->symbol,
             ]));
         }
 
@@ -35,28 +38,34 @@ class CryptAPIFeeModuleFrontController extends ModuleFrontController
 
         $total = $objCart->getOrderTotal(true, Cart::BOTH);
 
-        $feeOrder = $total * $totalFee;
+        $feeOrder = '0';
 
-        $selected = $_REQUEST['cryptapi_coin'];
+        $selected = (string) $_REQUEST['cryptapi_coin'];
 
         if ($selected === 'none') {
-            $this->context->cookie->cryptapi_fee = round(CryptAPIHelper::sig_fig($feeOrder, 6), 2);
+            $this->context->cookie->cryptapi_fee = '';
             exit(json_encode([
-                'fee' => round(CryptAPIHelper::sig_fig($feeOrder, 6), 2) . ' ' . Currency::getDefaultCurrency()->symbol,
-                'total' => round(CryptAPIHelper::sig_fig($total + $feeOrder, 6), 2) . ' ' . Currency::getDefaultCurrency()->symbol,
+                'fee' => 0,
+                'total' => 0,
+                'simbCurrency' => Currency::getDefaultCurrency()->symbol,
             ]));
         }
 
-        if (!empty($selected) && $selected != 'none' && !empty(Configuration::get('cryptapi_add_blockchain_fee'))) {
-            $est = CryptAPIHelper::get_estimate($selected);
-
-            $feeOrder += (float) $est->{Currency::getDefaultCurrency()->iso_code};
+        if (!empty($totalFee)) {
+            $feeOrder = bcmul((string) $total, (string) $totalFee, 2);
         }
-        $this->context->cookie->cryptapi_fee = round(CryptAPIHelper::sig_fig($feeOrder, 6), 2);
+
+        if ($blockchainFee === '1') {
+            $est = CryptAPIHelper::get_estimate($selected);
+            $feeOrder = bcadd($feeOrder, (string) $est->{Currency::getDefaultCurrency()->iso_code}, 2);
+        }
+
+        $this->context->cookie->cryptapi_fee = CryptAPIHelper::sig_fig($feeOrder, 2);
 
         exit(json_encode([
-            'fee' => round(CryptAPIHelper::sig_fig($feeOrder, 6), 2) . ' ' . Currency::getDefaultCurrency()->symbol,
-            'total' => round(CryptAPIHelper::sig_fig($total + $feeOrder, 6), 2) . ' ' . Currency::getDefaultCurrency()->symbol,
+            'fee' => (float) CryptAPIHelper::sig_fig($feeOrder, 2),
+            'total' => bcadd((string) $total, $feeOrder, 2),
+            'simbCurrency' => Currency::getDefaultCurrency()->symbol,
         ]));
     }
 }

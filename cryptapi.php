@@ -37,8 +37,8 @@ class cryptapi extends PaymentModule
     {
         $this->name = 'cryptapi';
         $this->tab = 'payments_gateways';
-        $this->version = '1.1.1';
-        $this->ps_versions_compliancy = ['min' => '1.7', 'max' => '1.7.9.99'];
+        $this->version = '1.2.0';
+        $this->ps_versions_compliancy = ['min' => '1.7', 'max' => '8.9.9'];
         $this->author = 'CryptAPI';
         $this->controllers = ['state', 'validation', 'callback', 'success', 'cronjob', 'fee'];
         $this->currencies = true;
@@ -60,7 +60,8 @@ class cryptapi extends PaymentModule
     public function install()
     {
         $db = Db::getInstance();
-        if (!parent::install() ||
+        if (
+            !parent::install() ||
             !$this->registerHook('paymentOptions') ||
             !$this->registerHook('paymentReturn') ||
             !$this->registerHook('displayAdminOrderTabOrder') ||
@@ -231,13 +232,13 @@ class cryptapi extends PaymentModule
                         'options' => [
                             'query' => [
                                 [
-                                    'id_option' => 0,
-                                    'name' => $this->trans('No', [], 'Admin.Global'),
-                                ],
-                                [
                                     'id_option' => 1,
                                     'name' => $this->trans('Yes', [], 'Admin.Global'),
                                 ],
+                                [
+                                    'id_option' => 0,
+                                    'name' => $this->trans('No', [], 'Admin.Global'),
+                                ]
                             ],
                             'id' => 'id_option',
                             'name' => 'name',
@@ -258,13 +259,13 @@ class cryptapi extends PaymentModule
                         'options' => [
                             'query' => [
                                 [
-                                    'id_option' => 0,
-                                    'name' => $this->trans('No', [], 'Admin.Global'),
-                                ],
-                                [
                                     'id_option' => 1,
                                     'name' => $this->trans('Yes', [], 'Admin.Global'),
                                 ],
+                                [
+                                    'id_option' => 0,
+                                    'name' => $this->trans('No', [], 'Admin.Global'),
+                                ]
                             ],
                             'id' => 'id_option',
                             'name' => 'name',
@@ -665,20 +666,34 @@ class cryptapi extends PaymentModule
         // Creating this array to preselect the currency
         $coins_db = $db->getRow('SELECT * FROM `' . _DB_PREFIX_ . 'cryptapi_coins` WHERE id=1');
 
+        $cryptapi_active = Tools::getValue('cryptapi_active', Configuration::get('cryptapi_active'));
+        $cryptapi_checkout_title = Tools::getValue('cryptapi_checkout_title', Configuration::get('cryptapi_checkout_title'));
+        $cryptapi_qrcode_size = Tools::getValue('cryptapi_qrcode_size', Configuration::get('cryptapi_qrcode_size'));
+        $cryptapi_api_key = Tools::getValue('cryptapi_api_key', Configuration::get('cryptapi_api_key'));
+        $cryptapi_add_blockchain_fee = Tools::getValue('cryptapi_add_blockchain_fee', Configuration::get('cryptapi_add_blockchain_fee'));
+        $cryptapi_fee_order_percentage = Tools::getValue('cryptapi_fee_order_percentage', Configuration::get('cryptapi_fee_order_percentage'));
+        $cryptapi_show_branding = Tools::getValue('cryptapi_show_branding', Configuration::get('cryptapi_show_branding'));
+        $cryptapi_qrcode_default = Tools::getValue('cryptapi_qrcode_default', Configuration::get('cryptapi_qrcode_default'));
+        $cryptapi_color_scheme = Tools::getValue('cryptapi_color_scheme', Configuration::get('cryptapi_color_scheme'));
+        $cryptapi_refresh_value_interval = Tools::getValue('cryptapi_refresh_value_interval', Configuration::get('cryptapi_refresh_value_interval'));
+        $cryptapi_order_cancelation_timeout = Tools::getValue('cryptapi_order_cancelation_timeout', Configuration::get('cryptapi_order_cancelation_timeout'));
+        $cryptapi_disable_conversion = Tools::getValue('cryptapi_disable_conversion', Configuration::get('cryptapi_disable_conversion'));
+        $cryptapi_qrcode_setting = Tools::getValue('cryptapi_qrcode_setting', Configuration::get('cryptapi_qrcode_setting'));
+
         // Load current value into the form
-        $helper->fields_value['cryptapi_active'] = empty(Tools::getValue('cryptapi_active', Configuration::get('cryptapi_active'))) ? 0 : Tools::getValue('cryptapi_active', Configuration::get('cryptapi_active'));
-        $helper->fields_value['cryptapi_checkout_title'] = empty(Tools::getValue('cryptapi_checkout_title', Configuration::get('cryptapi_checkout_title'))) ? 'Cryptocurrency' : Tools::getValue('cryptapi_checkout_title', Configuration::get('cryptapi_checkout_title'));
-        $helper->fields_value['cryptapi_qrcode_size'] = empty(Tools::getValue('cryptapi_qrcode_size', Configuration::get('cryptapi_qrcode_size'))) ? '300' : Tools::getValue('cryptapi_qrcode_size', Configuration::get('cryptapi_qrcode_size'));
-        $helper->fields_value['cryptapi_api_key'] = Tools::getValue('cryptapi_api_key', Configuration::get('cryptapi_api_key'));
-        $helper->fields_value['cryptapi_add_blockchain_fee'] = empty(Tools::getValue('cryptapi_add_blockchain_fee', Configuration::get('cryptapi_add_blockchain_fee'))) ? 1 : Tools::getValue('cryptapi_add_blockchain_fee', Configuration::get('cryptapi_add_blockchain_fee'));
-        $helper->fields_value['cryptapi_fee_order_percentage'] = empty(Tools::getValue('cryptapi_fee_order_percentage', Configuration::get('cryptapi_fee_order_percentage'))) && Tools::getValue('cryptapi_fee_order_percentage', Configuration::get('cryptapi_fee_order_percentage')) !== 0 ? '0' : Tools::getValue('cryptapi_fee_order_percentage', Configuration::get('cryptapi_fee_order_percentage'));
-        $helper->fields_value['cryptapi_show_branding'] = empty(Tools::getValue('cryptapi_show_branding', Configuration::get('cryptapi_show_branding'))) ? 1 : Tools::getValue('cryptapi_show_branding', Configuration::get('cryptapi_show_branding'));
-        $helper->fields_value['cryptapi_qrcode_default'] = empty(Tools::getValue('cryptapi_qrcode_default', Configuration::get('cryptapi_qrcode_default'))) ? 1 : Tools::getValue('cryptapi_qrcode_default', Configuration::get('cryptapi_qrcode_default'));
-        $helper->fields_value['cryptapi_color_scheme'] = Tools::getValue('cryptapi_color_scheme', Configuration::get('cryptapi_color_scheme'));
-        $helper->fields_value['cryptapi_refresh_value_interval'] = empty(Tools::getValue('cryptapi_refresh_value_interval', Configuration::get('cryptapi_refresh_value_interval'))) && Tools::getValue('cryptapi_refresh_value_interval', Configuration::get('cryptapi_refresh_value_interval')) !== '0' ? '0' : Tools::getValue('cryptapi_refresh_value_interval', Configuration::get('cryptapi_refresh_value_interval'));
-        $helper->fields_value['cryptapi_order_cancelation_timeout'] = empty(Tools::getValue('cryptapi_order_cancelation_timeout', Configuration::get('cryptapi_order_cancelation_timeout'))) && Tools::getValue('cryptapi_order_cancelation_timeout', Configuration::get('cryptapi_order_cancelation_timeout')) !== '0' ? '0' : Tools::getValue('cryptapi_order_cancelation_timeout', Configuration::get('cryptapi_order_cancelation_timeout'));
-        $helper->fields_value['cryptapi_disable_conversion'] = Tools::getValue('cryptapi_disable_conversion', Configuration::get('cryptapi_disable_conversion'));
-        $helper->fields_value['cryptapi_qrcode_setting'] = Tools::getValue('cryptapi_qrcode_setting', Configuration::get('cryptapi_qrcode_setting'));
+        $helper->fields_value['cryptapi_active'] = is_bool($cryptapi_active) ? 0 : $cryptapi_active;
+        $helper->fields_value['cryptapi_checkout_title'] = empty($cryptapi_checkout_title) ? 'Cryptocurrency' : $cryptapi_checkout_title;
+        $helper->fields_value['cryptapi_qrcode_size'] = empty($cryptapi_qrcode_size) ? '300' : $cryptapi_qrcode_size;
+        $helper->fields_value['cryptapi_api_key'] = $cryptapi_api_key;
+        $helper->fields_value['cryptapi_add_blockchain_fee'] = is_bool($cryptapi_add_blockchain_fee) ? 0 : $cryptapi_add_blockchain_fee;
+        $helper->fields_value['cryptapi_fee_order_percentage'] = empty($cryptapi_fee_order_percentage) && $cryptapi_fee_order_percentage !== 0 ? '0' : $cryptapi_fee_order_percentage;
+        $helper->fields_value['cryptapi_show_branding'] = is_bool($cryptapi_show_branding) ? 1 : $cryptapi_show_branding;
+        $helper->fields_value['cryptapi_qrcode_default'] = is_bool($cryptapi_qrcode_default) ? 1 : $cryptapi_qrcode_default;
+        $helper->fields_value['cryptapi_color_scheme'] = $cryptapi_color_scheme;
+        $helper->fields_value['cryptapi_refresh_value_interval'] = empty($cryptapi_refresh_value_interval) ? '0' : $cryptapi_refresh_value_interval;
+        $helper->fields_value['cryptapi_order_cancelation_timeout'] = empty($cryptapi_order_cancelation_timeout) ? '0' : $cryptapi_order_cancelation_timeout;
+        $helper->fields_value['cryptapi_disable_conversion'] = $cryptapi_disable_conversion;
+        $helper->fields_value['cryptapi_qrcode_setting'] = $cryptapi_qrcode_setting;
         $helper->fields_value['cryptapi_coins_cache'] = json_encode($cryptocurrencies_api);
         $helper->fields_value['cryptapi_cronjob_nonce'] = $default_nonce;
 
@@ -743,7 +758,7 @@ class cryptapi extends PaymentModule
 
         foreach (json_decode(Configuration::get('cryptapi_coins_cache'), true) as $ticker => $coin) {
             foreach ($selected as $selected_coin) {
-                if ($ticker == $selected_coin) {
+                if ((string) $ticker === (string) $selected_coin) {
                     if (!empty(Configuration::get('cryptapi_' . $ticker . '_address')) || !empty(Configuration::get('cryptapi_api_key'))) {
                         $coins[] = [
                             'ticker' => $ticker,
@@ -765,7 +780,6 @@ class cryptapi extends PaymentModule
         $this->context->smarty->assign([
             'action' => $this->context->link->getModuleLink($this->name, 'validation', [], true),
             'cryptocurrencies' => $coins,
-            'fee' => $this->context->link->getModuleLink($this->name, 'fee', [], true),
             'js_dir' => Media::getJSPath(_PS_MODULE_DIR_ . '/cryptapi/views/js/cryptapi_cart.js'),
         ]);
 
