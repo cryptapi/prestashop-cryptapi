@@ -51,7 +51,7 @@ class CryptAPIStateModuleFrontController extends ModuleFrontController
 
         $cryptapiPending = 0;
 
-        $paid = $order->getCurrentState() === Configuration::get('PS_OS_PAYMENT') ? 1 : 0;
+        $paid = (int) $order->getCurrentState() === (int) Configuration::get('PS_OS_PAYMENT') ? 1 : 0;
 
         if ($remainingPending <= 0 && !$paid) {
             $cryptapiPending = 1;
