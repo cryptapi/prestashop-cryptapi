@@ -42,12 +42,12 @@ class CryptAPIStateModuleFrontController extends ModuleFrontController
         $calc = cryptapi::calcOrder($historyDb, $metaData['cryptapi_total'], $metaData['cryptapi_total_fiat']);
 
         $alreadyPaid = $calc['already_paid'];
-        $alreadyPaidFiat = $calc['already_paid_fiat'];
+        $alreadyPaidFiat = CryptAPIHelper::sig_fig($calc['already_paid_fiat'], 2);
 
         $min_tx = (float) $metaData['cryptapi_min'];
 
         $remainingPending = $calc['remaining_pending'];
-        $remainingFiat = $calc['remaining_fiat'];
+        $remainingFiat = CryptAPIHelper::sig_fig($calc['remaining_fiat'], 2);
 
         $cryptapiPending = 0;
 
