@@ -52,7 +52,7 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
 
         $addr = Configuration::get('cryptapi_' . $selected . '_address');
 
-        $sessionFee = $this->context->cookie->blockbee_fee;
+        $sessionFee = $this->context->cookie->cryptapi_fee;
 
         $fee = !empty($sessionFee) ? $sessionFee : 0;
 
@@ -66,7 +66,7 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
         $cryptoTotal = CryptAPIHelper::sig_fig(CryptAPIHelper::get_conversion($currency->iso_code, $selected, $total, $disableConversion), 6);
 
         if ($cryptoTotal < $minTx) {
-            exit($this->module->l('Value too low, minimum is.', 'validation')) . $minTx;
+            exit($this->module->l('Value too low, minimum is.'. $minTx, 'validation'));
         }
 
         $apiKey = Configuration::get('cryptapi_api_key');

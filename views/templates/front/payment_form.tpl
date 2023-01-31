@@ -53,6 +53,7 @@
                 confirmButton.style.display = 'block';
                 if (Number(data.fee) === 0) {
                     confirmButton.style.display = 'block';
+                    payment_fee.style.display = 'none';
                     return;
                 }
                 document.getElementById('cryptapi_payment_fee').innerHTML = data.fee + ' ' + data.simbCurrency;
