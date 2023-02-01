@@ -35,3 +35,8 @@ upload/
 
 */DS_STORE
 .DS_Store
+
+composer.lock
+vendor/
+.idea/
+.fleet/
