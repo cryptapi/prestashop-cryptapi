@@ -238,7 +238,7 @@ class cryptapi extends PaymentModule
                                 [
                                     'id_option' => 0,
                                     'name' => $this->trans('No', [], 'Admin.Global'),
-                                ]
+                                ],
                             ],
                             'id' => 'id_option',
                             'name' => 'name',
@@ -265,7 +265,7 @@ class cryptapi extends PaymentModule
                                 [
                                     'id_option' => 0,
                                     'name' => $this->trans('No', [], 'Admin.Global'),
-                                ]
+                                ],
                             ],
                             'id' => 'id_option',
                             'name' => 'name',
@@ -838,7 +838,7 @@ class cryptapi extends PaymentModule
     {
         $db = Db::getInstance();
 
-        $db->Execute('INSERT INTO `' . _DB_PREFIX_ . 'cryptapi_order` (`order_id`, `response`) VALUES (' . (int )$order_id . ", '" . pSQL($params) . "')");
+        $db->Execute('INSERT INTO `' . _DB_PREFIX_ . 'cryptapi_order` (`order_id`, `response`) VALUES (' . (int) $order_id . ", '" . pSQL($params) . "')");
     }
 
     public static function getPaymentResponse($orderId)
