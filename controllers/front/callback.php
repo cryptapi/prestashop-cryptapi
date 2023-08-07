@@ -32,6 +32,10 @@ class CryptAPICallbackModuleFrontController extends ModuleFrontController
 
         $paid = $order->getCurrentState() === Configuration::get('PS_OS_PAYMENT') ? true : false;
 
+        if ($callback['coin'] !== $metaData['cryptapi_currency']) {
+                exit('*ok*');
+        }
+
         if ($paid || $order->getCurrentOrderState()->id === (int) Configuration::get('PS_OS_CANCELED') || $callback['nonce'] !== $metaData['cryptapi_nonce']) {
             exit('*ok*');
         }

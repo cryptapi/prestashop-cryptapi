@@ -24,7 +24,7 @@ The CryptAPI module enables your PrestaShop store to get receive payments in cry
 * (ETH) Ethereum
 * (BCH) Bitcoin Cash
 * (LTC) Litecoin
-* (XMR) Monero
+* (MATIC) Polygon
 * (TRX) Tron
 * (BNB) Binance Coin
 * (USDT) USDT
@@ -138,6 +138,9 @@ The easiest and fastest way is via our live chat on our [website](https://crypta
 * Minor bugfixes
 
 #### 1.2.1
+* Minor bugfixes
+
+#### 1.2.2
 * Minor bugfixes
 
 ### Upgrade Notice

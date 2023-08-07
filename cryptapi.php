@@ -37,7 +37,7 @@ class cryptapi extends PaymentModule
     {
         $this->name = 'cryptapi';
         $this->tab = 'payments_gateways';
-        $this->version = '1.2.1';
+        $this->version = '1.2.2';
         $this->ps_versions_compliancy = ['min' => '1.7', 'max' => '8.9.9'];
         $this->author = 'CryptAPI';
         $this->controllers = ['state', 'validation', 'callback', 'success', 'cronjob', 'fee'];
