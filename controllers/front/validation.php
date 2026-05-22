@@ -50,7 +50,7 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
             Tools::redirect('index.php?controller=order&step=1');
         }
 
-        $addr = Configuration::get('cryptapi_' . $selected . '_address');
+        $addr = Configuration::get(cryptapi::coinAddressConfigKey($selected));
 
         $sessionFee = $this->context->cookie->cryptapi_fee;
 

@@ -75,15 +75,20 @@ class cryptapi extends PaymentModule
             return false;
         }
 
-        $db->Execute('CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'cryptapi_order`(
-        `order_id` INT NOT NULL,
-        `response` TEXT,
-        PRIMARY KEY (`order_id`)
-        )');
+        if (!$db->Execute('CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'cryptapi_order`(
+            `order_id` INT NOT NULL,
+            `response` TEXT,
+            PRIMARY KEY (`order_id`)
+        ) ENGINE=' . _MYSQL_ENGINE_ . ' DEFAULT CHARSET=utf8mb4')) {
+            return false;
+        }
 
-        $db->Execute('CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'cryptapi_coins`(
-        `id` int NOT NULL PRIMARY KEY,
-        `coins` TEXT )');
+        if (!$db->Execute('CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'cryptapi_coins`(
+            `id` INT NOT NULL PRIMARY KEY,
+            `coins` TEXT
+        ) ENGINE=' . _MYSQL_ENGINE_ . ' DEFAULT CHARSET=utf8mb4')) {
+            return false;
+        }
 
         return true;
     }
@@ -93,15 +98,13 @@ class cryptapi extends PaymentModule
         Configuration::deleteByName('cryptapi_pubkey');
         Configuration::deleteByName('cryptapi_pubkey_fetched_at');
 
-        parent::uninstall() &&
-        $this->unregisterHook('paymentOptions') &&
-        $this->unregisterHook('paymentReturn') &&
-        $this->unregisterHook('displayAdminOrderTabOrder') &&
-        $this->unregisterHook('displayAdminOrderTabLink') &&
-        $this->unregisterHook('displayAdminOrderTabContent') &&
-        Configuration::updateValue('cryptapi_active', 0);
-
-        return true;
+        return parent::uninstall()
+            && $this->unregisterHook('paymentOptions')
+            && $this->unregisterHook('paymentReturn')
+            && $this->unregisterHook('displayAdminOrderTabOrder')
+            && $this->unregisterHook('displayAdminOrderTabLink')
+            && $this->unregisterHook('displayAdminOrderTabContent')
+            && Configuration::updateValue('cryptapi_active', 0);
     }
 
     public function getContent()
@@ -165,7 +168,8 @@ class cryptapi extends PaymentModule
 
             foreach (json_decode($coins_cache) as $ticker => $coin) {
                 // Saving the currency to the database ready to be used by the checkout form
-                $cryptocurrency_value = trim((string) Tools::getValue('cryptapi_' . $ticker . '_address'));
+                $configKey = cryptapi::coinAddressConfigKey($ticker);
+                $cryptocurrency_value = trim((string) Tools::getValue($configKey));
 
                 if (!cryptapi::validateCryptoAddress($ticker, $cryptocurrency_value)) {
                     $output = $this->displayError(
@@ -175,7 +179,7 @@ class cryptapi extends PaymentModule
                     return $output;
                 }
 
-                Configuration::updateValue('cryptapi_' . $ticker . '_address', $cryptocurrency_value);
+                Configuration::updateValue($configKey, $cryptocurrency_value);
             }
 
             // Update the database table with the selected currencies. If row doesn't exist, create new
@@ -661,7 +665,7 @@ class cryptapi extends PaymentModule
             $form['form']['input'][] = [
                 'type' => 'text',
                 'label' => $coin . ' Address',
-                'name' => 'cryptapi_' . $ticker . '_address',
+                'name' => cryptapi::coinAddressConfigKey($ticker),
                 'size' => 20,
             ];
         }
@@ -705,7 +709,7 @@ class cryptapi extends PaymentModule
 
         // Load current value into the form
         $helper->fields_value['cryptapi_active'] = is_bool($cryptapi_active) ? 0 : $cryptapi_active;
-        $helper->fields_value['cryptapi_checkout_title'] = empty($cryptapi_checkout_title) ? 'Cryptocurrency' : $cryptapi_checkout_title;
+        $helper->fields_value['cryptapi_checkout_title'] = empty($cryptapi_checkout_title) ? $this->l('Pay with cryptocurrency', '', 'en') : $cryptapi_checkout_title;
         $helper->fields_value['cryptapi_qrcode_size'] = empty($cryptapi_qrcode_size) ? '300' : $cryptapi_qrcode_size;
         $helper->fields_value['cryptapi_api_key'] = $cryptapi_api_key;
         $helper->fields_value['cryptapi_add_blockchain_fee'] = is_bool($cryptapi_add_blockchain_fee) ? 0 : $cryptapi_add_blockchain_fee;
@@ -727,10 +731,19 @@ class cryptapi extends PaymentModule
         }
 
         foreach ($cryptocurrencies_api as $ticker => $coin) {
-            $helper->fields_value['cryptapi_' . $ticker . '_address'] = Tools::getValue('cryptapi_' . $ticker . '_address', Configuration::get('cryptapi_' . $ticker . '_address'));
+            $key = cryptapi::coinAddressConfigKey($ticker);
+            $helper->fields_value[$key] = Tools::getValue($key, Configuration::get($key));
         }
 
         return $helper->generateForm([$form]);
+    }
+
+    public function hookPaymentReturn($params)
+    {
+        if (!$this->active) {
+            return null;
+        }
+        return null;
     }
 
     public function hookPaymentOptions($params)
@@ -782,7 +795,7 @@ class cryptapi extends PaymentModule
         foreach (json_decode(Configuration::get('cryptapi_coins_cache'), true) as $ticker => $coin) {
             foreach ($selected as $selected_coin) {
                 if ((string) $ticker === (string) $selected_coin) {
-                    if (!empty(Configuration::get('cryptapi_' . $ticker . '_address')) || !empty(Configuration::get('cryptapi_api_key'))) {
+                    if (!empty(Configuration::get(cryptapi::coinAddressConfigKey($ticker))) || !empty(Configuration::get('cryptapi_api_key'))) {
                         $coins[] = [
                             'ticker' => $ticker,
                             'coin' => $coin,
@@ -855,6 +868,11 @@ class cryptapi extends PaymentModule
         }
 
         return true;
+    }
+
+    public static function coinAddressConfigKey($ticker)
+    {
+        return 'cryptapi_' . preg_replace('/[^a-zA-Z0-9_]/', '_', (string) $ticker) . '_address';
     }
 
     public static function validateCryptoAddress($ticker, $address)
@@ -935,6 +953,26 @@ class cryptapi extends PaymentModule
         if (!empty($providedKey) && is_string($providedKey)
             && hash_equals((string) $order->secure_key, (string) $providedKey)) {
             return true;
+        }
+
+        // Backward-compat: orders created before v1.3.0 had no secure_key in
+        // their emailed payment URL. The URL is captured in metadata at order
+        // creation; if it still lacks `&key=`, the email link in the customer's
+        // inbox also lacks it and would otherwise 403. Allow access for those
+        // specific orders. Orders created from v1.3.0 onwards store the key in
+        // the URL, so the shim doesn't trigger for them.
+        $responseJson = cryptapi::getPaymentResponse((int) $order->id);
+        if ($responseJson !== null) {
+            $meta = json_decode($responseJson, true);
+            if (is_array($meta) && !empty($meta['cryptapi_payment_url'])
+                && strpos($meta['cryptapi_payment_url'], '&key=') === false
+                && strpos($meta['cryptapi_payment_url'], '?key=') === false) {
+                PrestaShopLogger::addLog(
+                    'CryptAPI: legacy pre-1.3.0 order accessed without secure_key',
+                    1, null, 'Order', (int) $order->id, true
+                );
+                return true;
+            }
         }
 
         return false;

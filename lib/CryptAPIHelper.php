@@ -340,40 +340,7 @@ class CryptAPIHelper
             return false;
         }
 
-        $candidates = [];
-        if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
-            $candidates[] = file_get_contents('php://input');
-        } else {
-            $request_uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
-
-            $schemes = [];
-            if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
-                $schemes[] = strtolower(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]);
-            }
-            if (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off') {
-                $schemes[] = 'https';
-            } else {
-                $schemes[] = 'http';
-            }
-            $schemes[] = 'https';
-            $schemes = array_values(array_unique(array_filter($schemes)));
-
-            $hosts = [];
-            if (!empty($_SERVER['HTTP_X_FORWARDED_HOST'])) {
-                $hosts[] = explode(',', $_SERVER['HTTP_X_FORWARDED_HOST'])[0];
-            }
-            if (!empty($_SERVER['HTTP_HOST'])) {
-                $hosts[] = $_SERVER['HTTP_HOST'];
-            }
-            $hosts = array_values(array_unique(array_filter($hosts)));
-
-            foreach ($schemes as $scheme) {
-                foreach ($hosts as $host) {
-                    $candidates[] = $scheme . '://' . $host . $request_uri;
-                }
-            }
-        }
-
+        $candidates = self::build_callback_verification_candidates();
         if (empty($candidates)) {
             return false;
         }
@@ -399,6 +366,77 @@ class CryptAPIHelper
         }
 
         return false;
+    }
+
+    private static function build_callback_verification_candidates()
+    {
+        if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+            return [file_get_contents('php://input')];
+        }
+
+        $request_uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+
+        $schemes = [];
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+            $schemes[] = strtolower(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]);
+        }
+        if (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off') {
+            $schemes[] = 'https';
+        } else {
+            $schemes[] = 'http';
+        }
+        $schemes[] = 'https';
+        $schemes[] = 'http';
+        $schemes = array_values(array_unique(array_filter($schemes)));
+
+        $hosts = [];
+        if (!empty($_SERVER['HTTP_X_FORWARDED_HOST'])) {
+            $hosts[] = explode(',', $_SERVER['HTTP_X_FORWARDED_HOST'])[0];
+        }
+        if (!empty($_SERVER['HTTP_HOST'])) {
+            $hosts[] = $_SERVER['HTTP_HOST'];
+        }
+        if (!empty($_SERVER['SERVER_NAME'])) {
+            $hosts[] = $_SERVER['SERVER_NAME'];
+        }
+        $hosts = array_values(array_unique(array_filter($hosts)));
+
+        $hostVariants = [];
+        foreach ($hosts as $host) {
+            $hostVariants[] = $host;
+            $bare = preg_replace('/:\d+$/', '', $host);
+            if ($bare !== $host) {
+                $hostVariants[] = $bare;
+            }
+            if (strpos($host, 'www.') === 0) {
+                $hostVariants[] = substr($host, 4);
+            } else {
+                $hostVariants[] = 'www.' . $host;
+            }
+        }
+        $hostVariants = array_values(array_unique(array_filter($hostVariants)));
+
+        $uriVariants = [$request_uri];
+        $qPos = strpos($request_uri, '?');
+        if ($qPos !== false) {
+            $path = substr($request_uri, 0, $qPos);
+            $query = substr($request_uri, $qPos);
+            $uriVariants[] = (substr($path, -1) === '/' ? rtrim($path, '/') : $path . '/') . $query;
+        } else {
+            $uriVariants[] = substr($request_uri, -1) === '/' ? rtrim($request_uri, '/') : $request_uri . '/';
+        }
+        $uriVariants = array_values(array_unique($uriVariants));
+
+        $candidates = [];
+        foreach ($schemes as $scheme) {
+            foreach ($hostVariants as $host) {
+                foreach ($uriVariants as $uri) {
+                    $candidates[] = $scheme . '://' . $host . $uri;
+                }
+            }
+        }
+
+        return $candidates;
     }
 
     private static function _request($coin, $endpoint, $params = [], $assoc = false)

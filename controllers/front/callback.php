@@ -85,10 +85,13 @@ class CryptAPICallbackModuleFrontController extends ModuleFrontController
         $db = Db::getInstance();
         $db->execute('START TRANSACTION');
 
+        $pendingEmail = null;
+
         try {
-            $row = $db->getRow(
-                'SELECT `response` FROM `' . _DB_PREFIX_ . 'cryptapi_order` WHERE order_id=' . $orderId . ' FOR UPDATE'
+            $rows = $db->executeS(
+                'SELECT `response` FROM `' . _DB_PREFIX_ . 'cryptapi_order` WHERE order_id=' . $orderId . ' LIMIT 1 FOR UPDATE'
             );
+            $row = !empty($rows) ? $rows[0] : null;
 
             if (empty($row) || empty($row['response'])) {
                 PrestaShopLogger::addLog(
@@ -205,8 +208,9 @@ class CryptAPICallbackModuleFrontController extends ModuleFrontController
                 $history = new OrderHistory();
                 $history->id_order = $orderId;
                 $history->changeIdOrderState((int) Configuration::get('PS_OS_PAYMENT'), $history->id_order, false);
-                $history->addWithemail();
-                $history->save();
+                $history->add();
+
+                $pendingEmail = $history;
 
                 PrestaShopLogger::addLog(
                     'CryptAPI: order finalized as paid (txid_in=' . substr((string) $callback['txid_in'], 0, 80) . ')',
@@ -230,6 +234,21 @@ class CryptAPICallbackModuleFrontController extends ModuleFrontController
                 true
             );
             throw $e;
+        }
+
+        if ($pendingEmail !== null && isset($order)) {
+            try {
+                $pendingEmail->sendEmail($order);
+            } catch (Exception $e) {
+                PrestaShopLogger::addLog(
+                    'CryptAPI: order state saved but confirmation email failed: ' . $e->getMessage(),
+                    2,
+                    null,
+                    'Order',
+                    $orderId,
+                    true
+                );
+            }
         }
 
         exit('*ok*');
