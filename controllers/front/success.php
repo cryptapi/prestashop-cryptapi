@@ -20,15 +20,22 @@ class CryptAPISuccessModuleFrontController extends ModuleFrontController
 {
     public function postProcess()
     {
-        $orderId = $_REQUEST['order_id'];
+        $orderId = (int) $_REQUEST['order_id'];
+        $providedKey = isset($_REQUEST['key']) ? (string) $_REQUEST['key'] : '';
 
-        try {
-            $metaData = json_decode(cryptapi::getPaymentResponse($orderId), true);
-        } catch (Exception $e) {
+        $order = new Order($orderId);
+
+        if (!cryptapi::authorizeOrderAccess($order, $providedKey)) {
+            header('HTTP/1.1 403 Forbidden');
             exit($this->module->l('Order not found.', 'success', 'en'));
         }
 
-        $order = new Order((int) $orderId);
+        $responseJson = cryptapi::getPaymentResponse($orderId);
+        $metaData = $responseJson !== null ? json_decode($responseJson, true) : null;
+        if (!is_array($metaData)) {
+            header('HTTP/1.1 404 Not Found');
+            exit($this->module->l('Order not found.', 'success', 'en'));
+        }
 
         $refresh_value_interval = (int) Configuration::get('cryptapi_refresh_value_interval');
         $order_cancelation_timeout = (int) Configuration::get('cryptapi_order_cancelation_timeout');
@@ -82,13 +89,21 @@ class CryptAPISuccessModuleFrontController extends ModuleFrontController
 
     public function setMedia()
     {
-        $order_id = $_REQUEST['order_id'];
+        $order_id = (int) $_REQUEST['order_id'];
+        $providedKey = isset($_REQUEST['key']) ? (string) $_REQUEST['key'] : '';
+
+        $order = new Order($order_id);
+        $orderKey = '';
+        if (cryptapi::authorizeOrderAccess($order, $providedKey)) {
+            $orderKey = (string) $order->secure_key;
+        }
 
         $adminajax_link = $this->context->link->getModuleLink('cryptapi', 'state');
 
         Media::addJsDef([
             'adminajax_link' => $adminajax_link,
             'order_id' => $order_id,
+            'order_key' => $orderKey,
         ]);
 
         $this->context->controller->registerStylesheet(

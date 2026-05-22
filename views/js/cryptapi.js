@@ -29,7 +29,8 @@ function check_status() {
             url: adminajax_link,
             data: {
                 ajax: true,
-                order_id: order_id
+                order_id: order_id,
+                key: typeof order_key !== 'undefined' ? order_key : ''
             },
 
             success: function (data) {

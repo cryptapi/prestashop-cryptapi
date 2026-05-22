@@ -20,6 +20,8 @@ class CryptAPIHelper
 {
     private static $base_url = 'https://api.cryptapi.io';
     private static $pro_url = 'https://api.blockbee.io';
+    private static $pubkey_url = 'https://api.cryptapi.io/pubkey/';
+    private static $pubkey_cache_ttl = 86400;
     private $own_address = null;
     private $payment_address = null;
     private $callback_url = null;
@@ -291,6 +293,152 @@ class CryptAPIHelper
         return $value;
     }
 
+    public static function get_pubkey($force_refresh = false)
+    {
+        $cached = Configuration::get('cryptapi_pubkey');
+        $fetched_at = (int) Configuration::get('cryptapi_pubkey_fetched_at');
+
+        if (!$force_refresh && !empty($cached) && (time() - $fetched_at) < self::$pubkey_cache_ttl) {
+            return $cached;
+        }
+
+        $curl = curl_init(self::$pubkey_url);
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($curl, CURLOPT_TIMEOUT, 10);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, 1);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 2);
+        $response = curl_exec($curl);
+        $http_code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        curl_close($curl);
+
+        if ($http_code !== 200 || empty($response)) {
+            return !empty($cached) ? $cached : null;
+        }
+
+        $decoded = json_decode($response, true);
+        $pubkey = isset($decoded['pubkey']) ? $decoded['pubkey'] : null;
+
+        if (empty($pubkey)) {
+            return !empty($cached) ? $cached : null;
+        }
+
+        Configuration::updateValue('cryptapi_pubkey', $pubkey);
+        Configuration::updateValue('cryptapi_pubkey_fetched_at', time());
+
+        return $pubkey;
+    }
+
+    public static function verify_callback_signature()
+    {
+        $sig_header = isset($_SERVER['HTTP_X_CA_SIGNATURE']) ? $_SERVER['HTTP_X_CA_SIGNATURE'] : '';
+        if (empty($sig_header)) {
+            return false;
+        }
+
+        $signature = base64_decode($sig_header, true);
+        if ($signature === false || $signature === '') {
+            return false;
+        }
+
+        $candidates = self::build_callback_verification_candidates();
+        if (empty($candidates)) {
+            return false;
+        }
+
+        $pubkey = self::get_pubkey();
+        if (empty($pubkey)) {
+            return false;
+        }
+
+        foreach ($candidates as $data) {
+            if (openssl_verify($data, $signature, $pubkey, OPENSSL_ALGO_SHA256) === 1) {
+                return true;
+            }
+        }
+
+        $fresh_pubkey = self::get_pubkey(true);
+        if (!empty($fresh_pubkey) && $fresh_pubkey !== $pubkey) {
+            foreach ($candidates as $data) {
+                if (openssl_verify($data, $signature, $fresh_pubkey, OPENSSL_ALGO_SHA256) === 1) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static function build_callback_verification_candidates()
+    {
+        if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+            return [file_get_contents('php://input')];
+        }
+
+        $request_uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+
+        $schemes = [];
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+            $schemes[] = strtolower(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]);
+        }
+        if (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off') {
+            $schemes[] = 'https';
+        } else {
+            $schemes[] = 'http';
+        }
+        $schemes[] = 'https';
+        $schemes[] = 'http';
+        $schemes = array_values(array_unique(array_filter($schemes)));
+
+        $hosts = [];
+        if (!empty($_SERVER['HTTP_X_FORWARDED_HOST'])) {
+            $hosts[] = explode(',', $_SERVER['HTTP_X_FORWARDED_HOST'])[0];
+        }
+        if (!empty($_SERVER['HTTP_HOST'])) {
+            $hosts[] = $_SERVER['HTTP_HOST'];
+        }
+        if (!empty($_SERVER['SERVER_NAME'])) {
+            $hosts[] = $_SERVER['SERVER_NAME'];
+        }
+        $hosts = array_values(array_unique(array_filter($hosts)));
+
+        $hostVariants = [];
+        foreach ($hosts as $host) {
+            $hostVariants[] = $host;
+            $bare = preg_replace('/:\d+$/', '', $host);
+            if ($bare !== $host) {
+                $hostVariants[] = $bare;
+            }
+            if (strpos($host, 'www.') === 0) {
+                $hostVariants[] = substr($host, 4);
+            } else {
+                $hostVariants[] = 'www.' . $host;
+            }
+        }
+        $hostVariants = array_values(array_unique(array_filter($hostVariants)));
+
+        $uriVariants = [$request_uri];
+        $qPos = strpos($request_uri, '?');
+        if ($qPos !== false) {
+            $path = substr($request_uri, 0, $qPos);
+            $query = substr($request_uri, $qPos);
+            $uriVariants[] = (substr($path, -1) === '/' ? rtrim($path, '/') : $path . '/') . $query;
+        } else {
+            $uriVariants[] = substr($request_uri, -1) === '/' ? rtrim($request_uri, '/') : $request_uri . '/';
+        }
+        $uriVariants = array_values(array_unique($uriVariants));
+
+        $candidates = [];
+        foreach ($schemes as $scheme) {
+            foreach ($hostVariants as $host) {
+                foreach ($uriVariants as $uri) {
+                    $candidates[] = $scheme . '://' . $host . $uri;
+                }
+            }
+        }
+
+        return $candidates;
+    }
+
     private static function _request($coin, $endpoint, $params = [], $assoc = false)
     {
         $base_url = CryptAPIHelper::$base_url;
@@ -316,8 +464,8 @@ class CryptAPIHelper
 
         $curl = curl_init($url);
         curl_setopt($curl, CURLOPT_HEADER, 0);
-        curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 0);
-        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, 0);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 2);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, 1);
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
 
         $response = curl_exec($curl);

@@ -50,7 +50,7 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
             Tools::redirect('index.php?controller=order&step=1');
         }
 
-        $addr = Configuration::get('cryptapi_' . $selected . '_address');
+        $addr = Configuration::get(cryptapi::coinAddressConfigKey($selected));
 
         $sessionFee = $this->context->cookie->cryptapi_fee;
 
@@ -59,7 +59,7 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
         $total = (float) $cart->getOrderTotal(true, Cart::BOTH) + $fee;
         $currency = $this->context->currency;
 
-        $disableConversion = Configuration::get('cryptapi_disable_conversion') === '0' ? false : true;
+        $disableConversion = cryptapi::isConversionDisabled();
         $info = CryptAPIHelper::get_info($selected);
         $minTx = (float) $info->minimum_transaction_coin;
 
@@ -90,10 +90,9 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
 
         $qrCodeSize = Configuration::get('cryptapi_qrcode_size');
 
-        $nonce = cryptapi::generateNonce();
         $orderId = $this->module->currentOrder;
 
-        $callbackUrl = _PS_BASE_URL_ . __PS_BASE_URI__ . 'module/cryptapi/callback?order=' . $orderId . '&nonce=' . $nonce;
+        $callbackUrl = _PS_BASE_URL_ . __PS_BASE_URI__ . 'module/cryptapi/callback?order=' . $orderId;
 
         $api = new CryptAPIHelper($selected, $addr, $apiKey, $callbackUrl, [], true);
 
@@ -105,10 +104,9 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
 
         $qrCodeDataValue = $api->get_qrcode($cryptoTotal, $qrCodeSize);
         $qrCodeData = $api->get_qrcode('', $qrCodeSize);
-        $paymentURL = _PS_BASE_URL_ . __PS_BASE_URI__ . 'module/cryptapi/success?order_id=' . $this->module->currentOrder;
+        $paymentURL = _PS_BASE_URL_ . __PS_BASE_URI__ . 'module/cryptapi/success?order_id=' . $this->module->currentOrder . '&key=' . urlencode($customer->secure_key);
 
         $paymentData = [
-            'cryptapi_nonce' => $nonce,
             'cryptapi_address' => $addressIn,
             'cryptapi_total' => $cryptoTotal,
             'cryptapi_total_fiat' => $total,

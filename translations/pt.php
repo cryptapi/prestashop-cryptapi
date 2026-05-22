@@ -93,3 +93,4 @@ $_MODULE['<{cryptapi}prestashop>payment_success_93065333867943ab1a1881b7983fb85d
 $_MODULE['<{cryptapi}prestashop>payment_success_8b36249c00d04fa8cf0ee475d1e21078'] = 'Aguardando Pagamento';
 $_MODULE['<{cryptapi}prestashop>payment_success_ab70cde49dde10650a739d9d6b993c5b'] = 'Aguardando por confirmação da rede';
 $_MODULE['<{cryptapi}prestashop>payment_success_385bd916f56ffa447cd78984f983c93c'] = 'Pagamento confirmado';
+$_MODULE['<{cryptapi}prestashop>cryptapi_1ee483be159fb5e446bca721057b574f'] = 'Pagar com criptomoeda';

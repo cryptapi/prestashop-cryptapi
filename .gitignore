@@ -40,3 +40,6 @@ composer.lock
 vendor/
 .idea/
 .fleet/
+docker/
+
+docs/
