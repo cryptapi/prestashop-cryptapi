@@ -24,7 +24,7 @@ The CryptAPI module enables your PrestaShop store to get receive payments in cry
 * (ETH) Ethereum
 * (BCH) Bitcoin Cash
 * (LTC) Litecoin
-* (MATIC) Polygon
+* (POL) Polygon
 * (TRX) Tron
 * (BNB) Binance Coin
 * (USDT) USDT
@@ -38,18 +38,41 @@ Exchange rates are fetched every 5 minutes.
 
 Supported currencies for automatic exchange rates are:
 
-* (USD) United States Dollar
-* (EUR) Euro
-* (GBP) Great Britain Pound
-* (JPY) Japanese Yen
-* (CNY) Chinese Yuan
-* (INR) Indian Rupee
-* (CAD) Canadian Dollar
-* (HKD) Hong Kong Dollar
-* (BRL) Brazilian Real
-* (DKK) Danish Krone
-* (MXN) Mexican Peso
-* (AED) United Arab Emirates Dirham
+- (USD) United States Dollar
+- (EUR) Euro
+- (GBP) Great Britain Pound
+- (CAD) Canadian Dollar
+- (JPY) Japanese Yen
+- (AED) UAE Dollar
+- (MYR) Malaysian Ringgit
+- (IDR) Indonesian Rupiah
+- (THB) Thai Baht
+- (CHF) Swiss Franc
+- (SGD) Singapore Dollar
+- (RUB) Russian Ruble
+- (ZAR) South African Rand
+- (TRY) Turkish Lira
+- (LKR) Sri Lankan Rupee
+- (RON) Romanian Leu
+- (BGN) Bulgarian Lev
+- (HUF) Hungarian Forint
+- (CZK) Czech Koruna
+- (PHP) Philippine Peso
+- (PLN) Poland Zloti
+- (UGX) Uganda Shillings
+- (MXN) Mexican Peso
+- (INR) Indian Rupee
+- (HKD) Hong Kong Dollar
+- (CNY) Chinese Yuan
+- (BRL) Brazilian Real
+- (DKK) Danish Krone
+- (TWD) New Taiwan Dollar
+- (AUD) Australian Dollar
+- (NGN) Nigerian Naira
+- (SEK) Swedish Krona
+- (NOK) Norwegian Krone
+- (UAH) Ukrainian Hryvnia
+- (VND) Vietnamese Dong
 
 If your WooCommerce's currency is none of the above, the exchange rates will default to USD.
 If you're using WooCommerce in a different currency not listed here and need support, please [contact us](https://cryptapi.io/contacts/) via our live chat.
