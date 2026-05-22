@@ -37,7 +37,7 @@ class cryptapi extends PaymentModule
     {
         $this->name = 'cryptapi';
         $this->tab = 'payments_gateways';
-        $this->version = '1.2.3';
+        $this->version = '1.3.0';
         $this->ps_versions_compliancy = ['min' => '1.7', 'max' => '8.9.9'];
         $this->author = 'CryptAPI';
         $this->controllers = ['state', 'validation', 'callback', 'success', 'cronjob', 'fee'];
@@ -77,7 +77,8 @@ class cryptapi extends PaymentModule
 
         $db->Execute('CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'cryptapi_order`(
         `order_id` INT NOT NULL,
-        `response` TEXT
+        `response` TEXT,
+        PRIMARY KEY (`order_id`)
         )');
 
         $db->Execute('CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'cryptapi_coins`(
@@ -89,6 +90,9 @@ class cryptapi extends PaymentModule
 
     public function uninstall()
     {
+        Configuration::deleteByName('cryptapi_pubkey');
+        Configuration::deleteByName('cryptapi_pubkey_fetched_at');
+
         parent::uninstall() &&
         $this->unregisterHook('paymentOptions') &&
         $this->unregisterHook('paymentReturn') &&
@@ -149,7 +153,7 @@ class cryptapi extends PaymentModule
                 return $output;
             }
 
-            if ($color_scheme != 'light' && $color_scheme != 'dark' && $color_scheme != 'auto') {
+            if (!in_array($color_scheme, ['light', 'dark', 'auto'], true)) {
                 $output = $this->displayError($this->l('Invalid Configuration value', '', 'en'));
 
                 return $output;
@@ -161,10 +165,12 @@ class cryptapi extends PaymentModule
 
             foreach (json_decode($coins_cache) as $ticker => $coin) {
                 // Saving the currency to the database ready to be used by the checkout form
-                $cryptocurrency_value = (string) Tools::getValue('cryptapi_' . $ticker . '_address');
+                $cryptocurrency_value = trim((string) Tools::getValue('cryptapi_' . $ticker . '_address'));
 
-                if (!empty($cryptocurrency_value) && !Validate::isString($cryptocurrency_value)) {
-                    $output = $this->displayError($this->l('Invalid Cryptocurrency Address', '', 'en'));
+                if (!cryptapi::validateCryptoAddress($ticker, $cryptocurrency_value)) {
+                    $output = $this->displayError(
+                        sprintf($this->l('Invalid %s address: please double-check the wallet address before saving.', '', 'en'), strtoupper($ticker))
+                    );
 
                     return $output;
                 }
@@ -173,10 +179,15 @@ class cryptapi extends PaymentModule
             }
 
             // Update the database table with the selected currencies. If row doesn't exist, create new
-            if (empty($db->getRow('SELECT * FROM `' . _DB_PREFIX_ . 'cryptapi_coins` WHERE id=1'))) {
-                $db->Execute('INSERT INTO `' . _DB_PREFIX_ . "cryptapi_coins` (`id`, `coins`) VALUES (1, '" . pSQL(json_encode($save_coins)) . "')");
+            if (empty($db->getRow('SELECT id FROM `' . _DB_PREFIX_ . 'cryptapi_coins` WHERE id=1'))) {
+                $db->insert('cryptapi_coins', [
+                    'id' => 1,
+                    'coins' => json_encode($save_coins),
+                ]);
             } else {
-                $db->Execute('UPDATE `' . _DB_PREFIX_ . "cryptapi_coins` SET coins='" . pSQL(json_encode($save_coins)) . "' WHERE id=1");
+                $db->update('cryptapi_coins', [
+                    'coins' => json_encode($save_coins),
+                ], 'id=1');
             }
 
             Configuration::updateValue('cryptapi_active', $active);
@@ -846,16 +857,108 @@ class cryptapi extends PaymentModule
         return true;
     }
 
+    public static function validateCryptoAddress($ticker, $address)
+    {
+        $address = trim($address);
+
+        if ($address === '') {
+            return true;
+        }
+
+        if (preg_match('/\s/', $address) === 1) {
+            return false;
+        }
+
+        $len = strlen($address);
+        if ($len < 20 || $len > 130) {
+            return false;
+        }
+
+        if (preg_match('/^[\x21-\x7E]+$/', $address) !== 1) {
+            return false;
+        }
+
+        $patterns = [
+            'btc' => ['/^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$/', '/^bc1[ac-hj-np-z02-9]{8,87}$/'],
+            'bch' => ['/^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$/', '/^(bitcoincash:)?[qp][a-z0-9]{41,42}$/'],
+            'ltc' => ['/^[LM3][a-km-zA-HJ-NP-Z1-9]{26,33}$/', '/^ltc1[ac-hj-np-z02-9]{8,87}$/'],
+            'doge' => ['/^D[5-9A-HJ-NP-U][a-km-zA-HJ-NP-Z1-9]{32}$/'],
+            'eth' => ['/^0x[a-fA-F0-9]{40}$/'],
+            'trx' => ['/^T[1-9A-HJ-NP-Za-km-z]{33}$/'],
+            'xmr' => ['/^[48][0-9AB][1-9A-HJ-NP-Za-km-z]{93}$/'],
+            'iota' => ['/^iota1[a-z0-9]{59}$/'],
+            'miota' => ['/^iota1[a-z0-9]{59}$/'],
+            'xrp' => ['/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/'],
+        ];
+
+        $tickerLower = strtolower($ticker);
+
+        $family = $tickerLower;
+        if (strpos($tickerLower, '_') !== false) {
+            $parts = explode('_', $tickerLower);
+            $family = end($parts);
+        }
+        if (in_array($family, ['polygon', 'bsc', 'matic', 'arbitrum', 'optimism', 'avax'], true)) {
+            $family = 'eth';
+        }
+
+        if (!isset($patterns[$family])) {
+            return true;
+        }
+
+        foreach ($patterns[$family] as $regex) {
+            if (preg_match($regex, $address) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static function isConversionDisabled()
+    {
+        return (int) Configuration::get('cryptapi_disable_conversion') === 1;
+    }
+
+    public static function authorizeOrderAccess($order, $providedKey = null)
+    {
+        if (!Validate::isLoadedObject($order)) {
+            return false;
+        }
+
+        $context = Context::getContext();
+        if (!empty($context->customer) && (int) $context->customer->id > 0
+            && (int) $order->id_customer === (int) $context->customer->id) {
+            return true;
+        }
+
+        if (!empty($providedKey) && is_string($providedKey)
+            && hash_equals((string) $order->secure_key, (string) $providedKey)) {
+            return true;
+        }
+
+        return false;
+    }
+
     public static function addPaymentResponse($order_id, $params)
     {
-        $db = Db::getInstance();
-
-        $db->Execute('INSERT INTO `' . _DB_PREFIX_ . 'cryptapi_order` (`order_id`, `response`) VALUES (' . (int) $order_id . ", '" . pSQL($params) . "')");
+        Db::getInstance()->insert('cryptapi_order', [
+            'order_id' => (int) $order_id,
+            'response' => $params,
+        ]);
     }
 
     public static function getPaymentResponse($orderId)
     {
-        return Db::getInstance()->getRow('SELECT * FROM `' . _DB_PREFIX_ . 'cryptapi_order` WHERE order_id=' . (int) $orderId)['response'];
+        $row = Db::getInstance()->getRow(
+            'SELECT `response` FROM `' . _DB_PREFIX_ . 'cryptapi_order` WHERE order_id=' . (int) $orderId
+        );
+
+        if (empty($row) || !isset($row['response'])) {
+            return null;
+        }
+
+        return $row['response'];
     }
 
     public static function updatePaymentResponse($order_id, $param, $value)
@@ -866,15 +969,20 @@ class cryptapi extends PaymentModule
             $metaData[$param] = $value;
             $paymentData = json_encode($metaData);
 
-            $db = Db::getInstance();
-            $db->Execute('UPDATE `' . _DB_PREFIX_ . "cryptapi_order` SET response='" . pSQL($paymentData) . "' WHERE order_id=" . (int) $order_id);
+            Db::getInstance()->update(
+                'cryptapi_order',
+                ['response' => $paymentData],
+                'order_id=' . (int) $order_id
+            );
         }
     }
 
     public static function getAllOrders()
     {
         // Get only CryptAPI Payments that are waiting for payment
-        $orders = Db::getInstance()->executeS('SELECT * FROM `' . _DB_PREFIX_ . 'orders` WHERE module="cryptapi" AND current_state=' . Configuration::get(self::CRYPTAPI_WAITING));
+        $orders = Db::getInstance()->executeS(
+            'SELECT * FROM `' . _DB_PREFIX_ . 'orders` WHERE module="cryptapi" AND current_state=' . (int) Configuration::get(self::CRYPTAPI_WAITING)
+        );
 
         return $orders;
     }
@@ -884,80 +992,107 @@ class cryptapi extends PaymentModule
         $order_timeout = (int) Configuration::get('cryptapi_order_cancelation_timeout');
         $value_refresh = (int) Configuration::get('cryptapi_refresh_value_interval');
 
-        if ((int) $order_timeout === 0 && (int) $value_refresh === 0) {
-            exit;
+        if ($order_timeout === 0 && $value_refresh === 0) {
+            return;
         }
 
         $orders = cryptapi::getAllOrders();
+        if (empty($orders)) {
+            return;
+        }
 
-        if (!empty($orders)) {
-            $currency = strtolower(Currency::getDefaultCurrency()->iso_code);
+        foreach ($orders as $order) {
+            cryptapi::processOrderTick($order, $order_timeout, $value_refresh);
+        }
+    }
 
-            foreach ($orders as $order) {
-                $orderId = $order['id_order'];
-                $disableConversion = Configuration::get('cryptapi_disable_conversion');
-                $qrCodeSize = Configuration::get('cryptapi_qrcode_size');
+    public static function processOrderTick($order, $order_timeout = null, $value_refresh = null)
+    {
+        if ($order_timeout === null) {
+            $order_timeout = (int) Configuration::get('cryptapi_order_cancelation_timeout');
+        }
+        if ($value_refresh === null) {
+            $value_refresh = (int) Configuration::get('cryptapi_refresh_value_interval');
+        }
 
-                $metaData = json_decode(cryptapi::getPaymentResponse($orderId), true);
+        if ($order_timeout === 0 && $value_refresh === 0) {
+            return;
+        }
 
-                if (!empty($metaData['cryptapi_last_price_update'])) {
-                    $last_price_update = $metaData['cryptapi_last_price_update'];
+        $waitingState = (int) Configuration::get(self::CRYPTAPI_WAITING);
+        if ((int) $order['current_state'] !== $waitingState) {
+            return;
+        }
 
-                    $historyDb = $metaData['cryptapi_history'];
+        $orderId = (int) $order['id_order'];
+        $disableConversion = cryptapi::isConversionDisabled();
+        $qrCodeSize = Configuration::get('cryptapi_qrcode_size');
+        $currency = strtolower(Currency::getDefaultCurrency()->iso_code);
 
-                    $min_tx = (float) $metaData['cryptapi_min'];
+        $responseJson = cryptapi::getPaymentResponse($orderId);
+        if ($responseJson === null) {
+            return;
+        }
+        $metaData = json_decode($responseJson, true);
+        if (!is_array($metaData) || empty($metaData['cryptapi_last_price_update'])) {
+            return;
+        }
 
-                    $calc = cryptapi::calcOrder($historyDb, $metaData['cryptapi_total'], $metaData['cryptapi_total_fiat']);
+        $last_price_update = $metaData['cryptapi_last_price_update'];
+        $historyDb = $metaData['cryptapi_history'];
+        $min_tx = (string) $metaData['cryptapi_min'];
 
-                    $remaining = $calc['remaining'];
-                    $remaining_pending = $calc['remaining_pending'];
-                    $already_paid = $calc['already_paid'];
+        $calc = cryptapi::calcOrder($historyDb, $metaData['cryptapi_total'], $metaData['cryptapi_total_fiat']);
+        $remaining = $calc['remaining'];
+        $remaining_pending = $calc['remaining_pending'];
+        $already_paid = $calc['already_paid'];
 
-                    if ($value_refresh !== 0 && $last_price_update + $value_refresh <= time()) {
-                        if ($remaining === $remaining_pending) {
-                            $cryptapi_coin = $metaData['cryptapi_currency'];
+        if ($value_refresh !== 0 && $last_price_update + $value_refresh <= time()) {
+            if (bccomp($remaining, $remaining_pending, 8) === 0) {
+                $cryptapi_coin = $metaData['cryptapi_currency'];
 
-                            $crypto_total = CryptAPIHelper::sig_fig(CryptAPIHelper::get_conversion($currency, $cryptapi_coin, $order['total_paid'], $disableConversion), 6);
+                $crypto_total = CryptAPIHelper::sig_fig(CryptAPIHelper::get_conversion($currency, $cryptapi_coin, $order['total_paid'], $disableConversion), 6);
 
-                            cryptapi::updatePaymentResponse($orderId, 'cryptapi_total', $crypto_total);
+                cryptapi::updatePaymentResponse($orderId, 'cryptapi_total', $crypto_total);
 
-                            $metaData = json_decode(cryptapi::getPaymentResponse($orderId), true);
-
-                            $calc_cron = cryptapi::calcOrder($historyDb, $metaData['cryptapi_total'], $metaData['cryptapi_total_fiat']);
-
-                            $crypto_remaining_total = $calc_cron['remaining_pending'];
-
-                            if ($remaining_pending <= $min_tx && $remaining_pending > 0) {
-                                $qr_code_data_value = CryptAPIHelper::get_static_qrcode($metaData['cryptapi_address'], $cryptapi_coin, $min_tx, $qrCodeSize);
-                            } else {
-                                $qr_code_data_value = CryptAPIHelper::get_static_qrcode($metaData['cryptapi_address'], $cryptapi_coin, $crypto_remaining_total, $qrCodeSize);
-                            }
-
-                            cryptapi::updatePaymentResponse($orderId, 'cryptapi_qr_code_value', $qr_code_data_value['qr_code']);
-                        }
-
-                        cryptapi::updatePaymentResponse($orderId, 'cryptapi_last_price_update', time());
-                    }
-
-                    if ($order_timeout !== 0 && ($metaData['cryptapi_order_created'] + $order_timeout) <= time() && $already_paid <= 0) {
-                        $history = new OrderHistory();
-                        $history->id_order = $orderId;
-                        $history->changeIdOrderState((int) Configuration::get('PS_OS_CANCELED'), $history->id_order, false);
-                        $history->addWithemail();
-                        $history->save();
-                    }
+                $responseJson = cryptapi::getPaymentResponse($orderId);
+                $metaData = $responseJson !== null ? json_decode($responseJson, true) : null;
+                if (!is_array($metaData)) {
+                    return;
                 }
+
+                $calc_cron = cryptapi::calcOrder($historyDb, $metaData['cryptapi_total'], $metaData['cryptapi_total_fiat']);
+                $crypto_remaining_total = $calc_cron['remaining_pending'];
+
+                if (bccomp($remaining_pending, $min_tx, 8) <= 0 && bccomp($remaining_pending, '0', 8) > 0) {
+                    $qr_code_data_value = CryptAPIHelper::get_static_qrcode($metaData['cryptapi_address'], $cryptapi_coin, $min_tx, $qrCodeSize);
+                } else {
+                    $qr_code_data_value = CryptAPIHelper::get_static_qrcode($metaData['cryptapi_address'], $cryptapi_coin, $crypto_remaining_total, $qrCodeSize);
+                }
+
+                cryptapi::updatePaymentResponse($orderId, 'cryptapi_qr_code_value', $qr_code_data_value['qr_code']);
             }
+
+            cryptapi::updatePaymentResponse($orderId, 'cryptapi_last_price_update', time());
+        }
+
+        if ($order_timeout !== 0 && ($metaData['cryptapi_order_created'] + $order_timeout) <= time() && bccomp($already_paid, '0', 8) <= 0) {
+            $history = new OrderHistory();
+            $history->id_order = $orderId;
+            $history->changeIdOrderState((int) Configuration::get('PS_OS_CANCELED'), $history->id_order, false);
+            $history->addWithemail();
+            $history->save();
         }
     }
 
     public static function generateNonce($len = 32)
     {
         $data = str_split('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789');
+        $max = count($data) - 1;
 
         $nonce = [];
         for ($i = 0; $i < $len; ++$i) {
-            $nonce[] = $data[mt_rand(0, sizeof($data) - 1)];
+            $nonce[] = $data[random_int(0, $max)];
         }
 
         return implode('', $nonce);
@@ -986,11 +1121,11 @@ class cryptapi extends PaymentModule
         }
 
         return [
-            'already_paid' => (float) $already_paid,
-            'already_paid_fiat' => (float) $already_paid_fiat,
-            'remaining' => (float) $remaining,
-            'remaining_pending' => (float) $remaining_pending,
-            'remaining_fiat' => (float) $remaining_fiat,
+            'already_paid' => (string) $already_paid,
+            'already_paid_fiat' => (string) $already_paid_fiat,
+            'remaining' => (string) $remaining,
+            'remaining_pending' => (string) $remaining_pending,
+            'remaining_fiat' => (string) $remaining_fiat,
         ];
     }
 
@@ -1001,9 +1136,12 @@ class cryptapi extends PaymentModule
         $customerMail = $customer->email;
         $customerName = $customer->firstname . ' ' . $customer->lastname;
 
-        try {
-            $metaData = json_decode(cryptapi::getPaymentResponse($orderId), true);
-        } catch (Exception $e) {
+        $responseJson = cryptapi::getPaymentResponse($orderId);
+        if ($responseJson === null) {
+            return;
+        }
+        $metaData = json_decode($responseJson, true);
+        if (!is_array($metaData)) {
             return;
         }
 
@@ -1043,8 +1181,12 @@ class cryptapi extends PaymentModule
             return;
         }
 
-        $metaData = json_decode(cryptapi::getPaymentResponse($order->id), true);
-        $history = $metaData['cryptapi_history'];
+        $responseJson = cryptapi::getPaymentResponse($order->id);
+        $metaData = $responseJson !== null ? json_decode($responseJson, true) : null;
+        if (!is_array($metaData)) {
+            return;
+        }
+        $history = isset($metaData['cryptapi_history']) ? $metaData['cryptapi_history'] : [];
 
         unset($metaData['cryptapi_history']);
 

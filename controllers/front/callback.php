@@ -22,79 +22,214 @@ class CryptAPICallbackModuleFrontController extends ModuleFrontController
     {
         require_once _PS_MODULE_DIR_ . 'cryptapi/lib/CryptAPIHelper.php';
 
-        $callback = $_REQUEST;
+        if (!CryptAPIHelper::verify_callback_signature()) {
+            PrestaShopLogger::addLog(
+                'CryptAPI: callback signature verification failed (order=' . (isset($_GET['order']) ? (int) $_GET['order'] : 'n/a') . ')',
+                3,
+                null,
+                'Order',
+                isset($_GET['order']) ? (int) $_GET['order'] : null,
+                true
+            );
+            header('HTTP/1.1 401 Unauthorized');
+            exit('*invalid signature*');
+        }
+
+        $callback = $_GET;
+        $orderIdLog = isset($callback['order']) ? (int) $callback['order'] : null;
+
+        $required = ['order', 'coin', 'uuid', 'value_coin', 'pending', 'txid_in'];
+        foreach ($required as $field) {
+            if (!isset($callback[$field]) || $callback[$field] === '') {
+                PrestaShopLogger::addLog(
+                    'CryptAPI: callback missing required field "' . $field . '"',
+                    2,
+                    null,
+                    'Order',
+                    $orderIdLog,
+                    true
+                );
+                header('HTTP/1.1 400 Bad Request');
+                exit('*missing field*');
+            }
+        }
+
+        if (!is_numeric($callback['value_coin']) || (float) $callback['value_coin'] <= 0) {
+            PrestaShopLogger::addLog(
+                'CryptAPI: callback invalid value_coin (received: ' . substr((string) $callback['value_coin'], 0, 32) . ')',
+                2,
+                null,
+                'Order',
+                $orderIdLog,
+                true
+            );
+            header('HTTP/1.1 400 Bad Request');
+            exit('*invalid value_coin*');
+        }
+
+        if (!in_array((string) $callback['pending'], ['0', '1'], true)) {
+            PrestaShopLogger::addLog(
+                'CryptAPI: callback invalid pending value',
+                2,
+                null,
+                'Order',
+                $orderIdLog,
+                true
+            );
+            header('HTTP/1.1 400 Bad Request');
+            exit('*invalid pending*');
+        }
 
         $orderId = (int) $callback['order'];
 
-        $order = new Order($orderId);
+        $db = Db::getInstance();
+        $db->execute('START TRANSACTION');
 
-        $metaData = json_decode(cryptAPI::getPaymentResponse($orderId), true);
+        try {
+            $row = $db->getRow(
+                'SELECT `response` FROM `' . _DB_PREFIX_ . 'cryptapi_order` WHERE order_id=' . $orderId . ' FOR UPDATE'
+            );
 
-        $paid = $order->getCurrentState() === Configuration::get('PS_OS_PAYMENT') ? true : false;
-
-        if ($callback['coin'] !== $metaData['cryptapi_currency']) {
+            if (empty($row) || empty($row['response'])) {
+                PrestaShopLogger::addLog(
+                    'CryptAPI: callback for unknown order (no cryptapi_order row)',
+                    2,
+                    null,
+                    'Order',
+                    $orderId,
+                    true
+                );
+                $db->execute('ROLLBACK');
                 exit('*ok*');
-        }
+            }
 
-        if ($paid || $order->getCurrentOrderState()->id === (int) Configuration::get('PS_OS_CANCELED') || $callback['nonce'] !== $metaData['cryptapi_nonce']) {
-            exit('*ok*');
-        }
+            $metaData = json_decode($row['response'], true);
+            if (!is_array($metaData)) {
+                PrestaShopLogger::addLog(
+                    'CryptAPI: cryptapi_order.response is not valid JSON',
+                    3,
+                    null,
+                    'Order',
+                    $orderId,
+                    true
+                );
+                $db->execute('ROLLBACK');
+                exit('*ok*');
+            }
 
-        $disableConversion = Configuration::get('cryptapi_disable_conversion') === 1 ? true : false;
+            $order = new Order($orderId);
 
-        $qrCodeSize = Configuration::get('cryptapi_qrcode_size');
+            $orderPaid = (int) $order->getCurrentState() === (int) Configuration::get('PS_OS_PAYMENT');
+            $orderCanceled = (int) $order->getCurrentOrderState()->id === (int) Configuration::get('PS_OS_CANCELED');
 
-        $paid = (float) $callback['value_coin'];
+            if ($callback['coin'] !== $metaData['cryptapi_currency']) {
+                PrestaShopLogger::addLog(
+                    'CryptAPI: callback coin mismatch (expected=' . $metaData['cryptapi_currency'] . ' received=' . substr((string) $callback['coin'], 0, 16) . ')',
+                    2,
+                    null,
+                    'Order',
+                    $orderId,
+                    true
+                );
+                $db->execute('ROLLBACK');
+                exit('*ok*');
+            }
 
-        $minTx = (float) $metaData['cryptapi_min'];
+            if ($orderPaid || $orderCanceled) {
+                $db->execute('ROLLBACK');
+                exit('*ok*');
+            }
 
-        $historyDb = $metaData['cryptapi_history'];
+            $disableConversion = cryptapi::isConversionDisabled();
+            $qrCodeSize = Configuration::get('cryptapi_qrcode_size');
+            $paid = (string) $callback['value_coin'];
+            $minTx = (string) $metaData['cryptapi_min'];
+            $historyDb = isset($metaData['cryptapi_history']) ? $metaData['cryptapi_history'] : [];
 
-        if (empty($historyDb[$callback['uuid']])) {
-            $fiat_conversion = CryptAPIHelper::get_conversion($metaData['cryptapi_currency'], Currency::getDefaultCurrency()->iso_code, $paid, $disableConversion);
+            $isNewUuid = empty($historyDb[$callback['uuid']]);
 
-            $historyDb[$callback['uuid']] = [
-                'timestamp' => time(),
-                'value_paid' => CryptAPIHelper::sig_fig($paid, 6),
-                'value_paid_fiat' => $fiat_conversion,
-                'pending' => $callback['pending'],
-            ];
-        } else {
-            $historyDb[$callback['uuid']]['pending'] = $callback['pending'];
-        }
+            if ($isNewUuid) {
+                $fiat_conversion = CryptAPIHelper::get_conversion(
+                    $metaData['cryptapi_currency'],
+                    Currency::getDefaultCurrency()->iso_code,
+                    $paid,
+                    $disableConversion
+                );
 
-        cryptapi::updatePaymentResponse($orderId, 'cryptapi_history', $historyDb);
+                $historyDb[$callback['uuid']] = [
+                    'timestamp' => time(),
+                    'value_paid' => CryptAPIHelper::sig_fig($paid, 6),
+                    'value_paid_fiat' => $fiat_conversion,
+                    'pending' => $callback['pending'],
+                ];
+            } else {
+                $historyDb[$callback['uuid']]['pending'] = $callback['pending'];
+            }
 
-        $metaData = json_decode(cryptAPI::getPaymentResponse($orderId), true);
+            $metaData['cryptapi_history'] = $historyDb;
 
-        $historyDb = $metaData['cryptapi_history'];
+            $calc = cryptapi::calcOrder($historyDb, $metaData['cryptapi_total'], $metaData['cryptapi_total_fiat']);
+            $remaining = $calc['remaining'];
+            $remainingPending = $calc['remaining_pending'];
 
-        $order->addOrderPayment(
-            '0',
-            $this->module->displayName,
-            $callback['coin'] . ': txid_in: ' . $callback['txid_in'],
-        );
+            $shouldFinalize = bccomp($remainingPending, '0', 8) <= 0 && bccomp($remaining, '0', 8) <= 0;
 
-        $calc = cryptapi::calcOrder($historyDb, $metaData['cryptapi_total'], $metaData['cryptapi_total_fiat']);
+            if (!$shouldFinalize) {
+                $qrAmount = bccomp($remainingPending, $minTx, 8) < 0 ? $minTx : $remainingPending;
+                $qrResponse = CryptAPIHelper::get_static_qrcode(
+                    $metaData['cryptapi_address'],
+                    $metaData['cryptapi_currency'],
+                    $qrAmount,
+                    $qrCodeSize
+                );
+                if (!empty($qrResponse['qr_code'])) {
+                    $metaData['cryptapi_qr_code_value'] = $qrResponse['qr_code'];
+                }
+            }
 
-        $remaining = $calc['remaining'];
-        $remainingPending = $calc['remaining_pending'];
+            $db->update(
+                'cryptapi_order',
+                ['response' => json_encode($metaData)],
+                'order_id=' . $orderId
+            );
 
-        if ($remainingPending <= 0) {
-            if ($remaining <= 0) {
+            if ($isNewUuid) {
+                $order->addOrderPayment(
+                    '0',
+                    $this->module->displayName,
+                    $callback['coin'] . ': txid_in: ' . $callback['txid_in']
+                );
+            }
+
+            if ($shouldFinalize) {
                 $history = new OrderHistory();
-                $history->id_order = (int) $callback['order'];
+                $history->id_order = $orderId;
                 $history->changeIdOrderState((int) Configuration::get('PS_OS_PAYMENT'), $history->id_order, false);
                 $history->addWithemail();
                 $history->save();
-            }
-            exit('*ok*');
-        }
 
-        if ($remainingPending < $minTx) {
-            cryptAPI::updatePaymentResponse($orderId, 'cryptapi_qr_code_value', CryptAPIHelper::get_static_qrcode($metaData['cryptapi_address'], $metaData['cryptapi_currency'], $minTx, $qrCodeSize)['qr_code']);
-        } else {
-            cryptAPI::updatePaymentResponse($orderId, 'cryptapi_qr_code_value', CryptAPIHelper::get_static_qrcode($metaData['cryptapi_address'], $metaData['cryptapi_currency'], $remainingPending, $qrCodeSize)['qr_code']);
+                PrestaShopLogger::addLog(
+                    'CryptAPI: order finalized as paid (txid_in=' . substr((string) $callback['txid_in'], 0, 80) . ')',
+                    1,
+                    null,
+                    'Order',
+                    $orderId,
+                    true
+                );
+            }
+
+            $db->execute('COMMIT');
+        } catch (Exception $e) {
+            $db->execute('ROLLBACK');
+            PrestaShopLogger::addLog(
+                'CryptAPI: callback handler exception: ' . $e->getMessage(),
+                3,
+                null,
+                'Order',
+                $orderId,
+                true
+            );
+            throw $e;
         }
 
         exit('*ok*');

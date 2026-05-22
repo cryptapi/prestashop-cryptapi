@@ -26,16 +26,23 @@ class CryptAPIStateModuleFrontController extends ModuleFrontController
             exit($this->module->l('Order not found.', 'error', 'en'));
         }
 
-        $orderId = $_REQUEST['order_id'];
+        $orderId = (int) $_REQUEST['order_id'];
+        $providedKey = isset($_REQUEST['key']) ? (string) $_REQUEST['key'] : '';
 
-        try {
-            $metaData = json_decode(cryptapi::getPaymentResponse($orderId), true);
-            $historyDb = $metaData['cryptapi_history'];
-        } catch (Exception $e) {
+        $order = new Order($orderId);
+
+        if (!cryptapi::authorizeOrderAccess($order, $providedKey)) {
+            header('HTTP/1.1 403 Forbidden');
             exit($this->module->l('Order not found.', 'error', 'en'));
         }
 
-        $order = new Order((int) $orderId);
+        $responseJson = cryptapi::getPaymentResponse($orderId);
+        $metaData = $responseJson !== null ? json_decode($responseJson, true) : null;
+        if (!is_array($metaData)) {
+            header('HTTP/1.1 404 Not Found');
+            exit($this->module->l('Order not found.', 'error', 'en'));
+        }
+        $historyDb = isset($metaData['cryptapi_history']) ? $metaData['cryptapi_history'] : [];
 
         $showMinFee = 0;
 
@@ -44,7 +51,7 @@ class CryptAPIStateModuleFrontController extends ModuleFrontController
         $alreadyPaid = $calc['already_paid'];
         $alreadyPaidFiat = CryptAPIHelper::sig_fig($calc['already_paid_fiat'], 2);
 
-        $min_tx = (float) $metaData['cryptapi_min'];
+        $min_tx = (string) $metaData['cryptapi_min'];
 
         $remainingPending = $calc['remaining_pending'];
         $remainingFiat = CryptAPIHelper::sig_fig($calc['remaining_fiat'], 2);
@@ -53,24 +60,28 @@ class CryptAPIStateModuleFrontController extends ModuleFrontController
 
         $paid = (int) $order->getCurrentState() === (int) Configuration::get('PS_OS_PAYMENT') ? 1 : 0;
 
-        if ($remainingPending <= 0 && !$paid) {
+        if (bccomp($remainingPending, '0', 8) <= 0 && !$paid) {
             $cryptapiPending = 1;
         }
 
         $counterCalc = (int) $metaData['cryptapi_last_price_update'] + (int) Configuration::get('cryptapi_refresh_value_interval') - time();
 
         if ($counterCalc < 0 && !$paid) {
-            cryptapi::cryptapiCronjob();
+            cryptapi::processOrderTick([
+                'id_order' => $order->id,
+                'total_paid' => $order->total_paid,
+                'current_state' => $order->getCurrentState(),
+            ]);
         }
 
-        if ($remainingPending <= $min_tx && $remainingPending > 0) {
+        if (bccomp($remainingPending, $min_tx, 8) <= 0 && bccomp($remainingPending, '0', 8) > 0) {
             $remainingPending = $min_tx;
             $showMinFee = 1;
         }
 
         if ($paid) {
-            $remainingFiat = 0;
-            $remainingPending = 0;
+            $remainingFiat = '0';
+            $remainingPending = '0';
         }
 
         $params = [
@@ -82,7 +93,7 @@ class CryptAPIStateModuleFrontController extends ModuleFrontController
             'show_min_fee' => $showMinFee,
             'order_history' => $historyDb,
             'counter' => (string) $counterCalc,
-            'crypto_total' => (float) $metaData['cryptapi_total'],
+            'crypto_total' => (string) $metaData['cryptapi_total'],
             'already_paid' => $alreadyPaid,
             'remaining' => $remainingPending,
             'fiat_remaining' => $remainingFiat,
