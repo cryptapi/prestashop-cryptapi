@@ -24,7 +24,7 @@ class CryptAPICronjobModuleFrontController extends ModuleFrontController
         $saved_nonce = (string) Configuration::get('cryptapi_cronjob_nonce');
 
         if ($saved_nonce === '' || !hash_equals($saved_nonce, $nonce)) {
-            Tools::redirect(_PS_BASE_URL_ . __PS_BASE_URI__);
+            Tools::redirect($this->context->link->getBaseLink());
         }
 
         cryptapi::cryptapiCronjob();

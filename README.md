@@ -173,5 +173,8 @@ The easiest and fastest way is via our live chat on our [website](https://crypta
 * Security and reliability improvements
 * Minor bugfixes
 
+#### 1.4.0
+* Bugfixes and security hardening
+
 ### Upgrade Notice
 * No breaking changes

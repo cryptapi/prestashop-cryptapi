@@ -40,8 +40,24 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
             exit($this->module->l('This payment method is not available.', 'validation'));
         }
 
-        $selected = $_REQUEST['cryptapi_coin'];
+        // CSRF: only accept the customer's own POSTed form carrying a valid token.
+        // On a missing/invalid token, redirect back to checkout and create no order.
+        if (Tools::strtoupper($_SERVER['REQUEST_METHOD']) !== 'POST') {
+            Tools::redirect('index.php?controller=order&step=1');
+        }
+
+        $token = (string) Tools::getValue('cryptapi_token');
+        if (empty($token) || !hash_equals(Tools::getToken('cryptapi_validation'), $token)) {
+            Tools::redirect('index.php?controller=order&step=1');
+        }
+
+        $selected = (string) Tools::getValue('cryptapi_coin');
         if ($selected === 'none') {
+            exit($this->module->l('Please select a cryptocurrency.', 'validation'));
+        }
+
+        // Whitelist: reject any coin that is not part of the merchant's enabled set.
+        if (!cryptapi::isEnabledCoin($selected)) {
             exit($this->module->l('Please select a cryptocurrency.', 'validation'));
         }
 
@@ -92,7 +108,16 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
 
         $orderId = $this->module->currentOrder;
 
-        $callbackUrl = _PS_BASE_URL_ . __PS_BASE_URI__ . 'module/cryptapi/callback?order=' . $orderId;
+        // Per-order unguessable secret bound to this callback URL. CryptAPI echoes
+        // it back unchanged in every callback, so callback.php can reject any
+        // callback whose nonce it doesn't recognise. This is defence-in-depth on
+        // top of the RSA signature check — without it the callback URL is just the
+        // sequential order id and an attacker who guessed it could race callbacks
+        // (e.g. with their own address_out) if signature verification were ever
+        // bypassed. See https://docs.blockbee.io — "Harden your callback with a secret".
+        $nonce = cryptapi::generateNonce(32);
+
+        $callbackUrl = $this->context->link->getModuleLink('cryptapi', 'callback', ['order' => $orderId, 'nonce' => $nonce], true);
 
         $api = new CryptAPIHelper($selected, $addr, $apiKey, $callbackUrl, [], true);
 
@@ -104,7 +129,7 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
 
         $qrCodeDataValue = $api->get_qrcode($cryptoTotal, $qrCodeSize);
         $qrCodeData = $api->get_qrcode('', $qrCodeSize);
-        $paymentURL = _PS_BASE_URL_ . __PS_BASE_URI__ . 'module/cryptapi/success?order_id=' . $this->module->currentOrder . '&key=' . urlencode($customer->secure_key);
+        $paymentURL = $this->context->link->getModuleLink('cryptapi', 'success', ['order_id' => $this->module->currentOrder, 'key' => $customer->secure_key], true);
 
         $paymentData = [
             'cryptapi_address' => $addressIn,
@@ -119,6 +144,7 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
             'cryptapi_order_created' => time(),
             'cryptapi_history' => [],
             'cryptapi_payment_url' => $paymentURL,
+            'cryptapi_nonce' => $nonce,
         ];
 
         cryptAPI::addPaymentResponse($orderId, json_encode($paymentData));
@@ -129,6 +155,6 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
 
         cryptapi::sendMail($orderId);
 
-        Tools::redirectLink($paymentURL);
+        Tools::redirect($paymentURL);
     }
 }

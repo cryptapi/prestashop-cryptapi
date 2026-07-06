@@ -370,10 +370,10 @@ class CryptAPIHelper
 
     private static function build_callback_verification_candidates()
     {
-        if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
-            return [file_get_contents('php://input')];
-        }
-
+        // Callbacks are delivered via GET and the controller acts solely on the
+        // query string, so always verify the signature against the reconstructed
+        // request URL (which covers the GET query) — never against php://input,
+        // which the controller does not consume.
         $request_uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
 
         $schemes = [];
@@ -452,10 +452,13 @@ class CryptAPIHelper
         }
 
         if (!empty($coin)) {
-            $coin = str_replace('_', '/', $coin);
-            $url = "{$base_url}/{$coin}/{$endpoint}/";
+            // Encode each path segment individually so a crafted coin cannot smuggle
+            // ?, &, #, / into the outbound URL, while preserving the intended
+            // "_" -> "/" segment mapping (e.g. "trc20_usdt" -> "trc20/usdt").
+            $coin_path = implode('/', array_map('rawurlencode', explode('_', $coin)));
+            $url = "{$base_url}/{$coin_path}/" . rawurlencode($endpoint) . '/';
         } else {
-            $url = "{$base_url}/{$endpoint}/";
+            $url = "{$base_url}/" . rawurlencode($endpoint) . '/';
         }
 
         if (!empty($data)) {

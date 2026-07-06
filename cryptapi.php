@@ -37,8 +37,8 @@ class cryptapi extends PaymentModule
     {
         $this->name = 'cryptapi';
         $this->tab = 'payments_gateways';
-        $this->version = '1.3.0';
-        $this->ps_versions_compliancy = ['min' => '1.7', 'max' => '8.9.9'];
+        $this->version = '1.4.0';
+        $this->ps_versions_compliancy = ['min' => '1.7', 'max' => '9.99.99'];
         $this->author = 'CryptAPI';
         $this->controllers = ['state', 'validation', 'callback', 'success', 'cronjob', 'fee'];
         $this->currencies = true;
@@ -132,84 +132,116 @@ class cryptapi extends PaymentModule
             $cronjob_nonce = Tools::getValue('cryptapi_cronjob_nonce');
             $coins = Tools::getValue('cryptapi_coins');
 
+            // Validation — on any failure show the error AND re-render the form so
+            // the merchant keeps their input and can correct it (never a bare error
+            // page with no form).
             if (empty($title) || !Validate::isString($title)) {
-                $output = $this->displayError($this->l('Invalid Configuration value', '', 'en'));
-
-                return $output;
+                return $this->displayError($this->l('Please enter a valid checkout title.', '', 'en')) . $this->displayForm();
             }
 
             if (empty($coins_cache) || !Validate::isString($coins_cache)) {
-                $output = $this->displayError($this->l('Invalid Configuration value', '', 'en'));
-
-                return $output;
+                return $this->displayError($this->l('Could not read the cryptocurrency list (it came back empty). Reload the settings page and try again — if it persists, the CryptAPI API may be unreachable.', '', 'en')) . $this->displayForm();
             }
 
             if (empty($qrcode_size) || !Validate::isInt($qrcode_size)) {
-                $output = $this->displayError($this->l('Invalid Configuration value. Qr Code Size must be a number.', '', 'en'));
-
-                return $output;
+                return $this->displayError($this->l('Invalid Configuration value. Qr Code Size must be a number.', '', 'en')) . $this->displayForm();
             }
 
             if (empty($coins)) {
-                $output = $this->displayError($this->l('Invalid Configuration value. Please select the cryptocurrencies you want to enable.', '', 'en'));
-
-                return $output;
+                return $this->displayError($this->l('Invalid Configuration value. Please select the cryptocurrencies you want to enable.', '', 'en')) . $this->displayForm();
             }
 
             if (!in_array($color_scheme, ['light', 'dark', 'auto'], true)) {
-                $output = $this->displayError($this->l('Invalid Configuration value', '', 'en'));
-
-                return $output;
+                return $this->displayError($this->l('Please choose a valid color scheme (light, dark or auto).', '', 'en')) . $this->displayForm();
             }
 
             foreach ($coins as $selected_coin) {
                 $save_coins[] = $selected_coin;
             }
 
-            foreach (json_decode($coins_cache) as $ticker => $coin) {
-                // Saving the currency to the database ready to be used by the checkout form
+            $decoded_coins_cache = json_decode($coins_cache, true);
+            if (!is_array($decoded_coins_cache)) {
+                return $this->displayError($this->l('The cryptocurrency list could not be parsed. Reload the settings page and try again.', '', 'en')) . $this->displayForm();
+            }
+
+            // Validate tickers/names/addresses first and collect the address writes,
+            // so nothing is persisted until every submitted value is known valid.
+            $addressesToSave = [];
+            foreach ($decoded_coins_cache as $ticker => $coin) {
+                // Whitelist the ticker/name values before they are cached and later
+                // rendered in the checkout form. Tickers are alphanumeric plus _ . -
+                // (real CryptAPI tickers include dots for bridged tokens, e.g.
+                // arbitrum_usdc.e); the name must be a safe generic display name.
+                // This still blocks HTML/JS (< > " ' & / space …) while accepting
+                // every legitimate coin.
+                if (!preg_match('/^[a-zA-Z0-9_.-]+$/', (string) $ticker) || !Validate::isGenericName((string) $coin)) {
+                    return $this->displayError(
+                        sprintf($this->l('Rejected cryptocurrency entry "%1$s" => "%2$s" (unexpected characters). Reload the settings page and try again.', '', 'en'), (string) $ticker, (string) $coin)
+                    ) . $this->displayForm();
+                }
+
                 $configKey = cryptapi::coinAddressConfigKey($ticker);
                 $cryptocurrency_value = trim((string) Tools::getValue($configKey));
 
                 if (!cryptapi::validateCryptoAddress($ticker, $cryptocurrency_value)) {
-                    $output = $this->displayError(
+                    return $this->displayError(
                         sprintf($this->l('Invalid %s address: please double-check the wallet address before saving.', '', 'en'), strtoupper($ticker))
-                    );
-
-                    return $output;
+                    ) . $this->displayForm();
                 }
 
-                Configuration::updateValue($configKey, $cryptocurrency_value);
+                $addressesToSave[$configKey] = $cryptocurrency_value;
             }
 
-            // Update the database table with the selected currencies. If row doesn't exist, create new
-            if (empty($db->getRow('SELECT id FROM `' . _DB_PREFIX_ . 'cryptapi_coins` WHERE id=1'))) {
-                $db->insert('cryptapi_coins', [
-                    'id' => 1,
-                    'coins' => json_encode($save_coins),
-                ]);
-            } else {
-                $db->update('cryptapi_coins', [
-                    'coins' => json_encode($save_coins),
-                ], 'id=1');
-            }
+            // Persist everything. Each write is checked and the whole block is
+            // guarded so a DB failure surfaces as a clear admin error (plus a log
+            // entry) instead of a fatal PrestaShopDatabaseException (dev mode) or a
+            // false "Settings updated" (prod, where failed writes return false).
+            try {
+                $ok = true;
 
-            Configuration::updateValue('cryptapi_active', $active);
-            Configuration::updateValue('cryptapi_checkout_title', $title);
-            Configuration::updateValue('cryptapi_api_key', $api_key);
-            Configuration::updateValue('cryptapi_add_blockchain_fee', $add_blockchain_fee);
-            Configuration::updateValue('cryptapi_fee_order_percentage', $fee_order_percentage);
-            Configuration::updateValue('cryptapi_show_branding', $show_branding);
-            Configuration::updateValue('cryptapi_qrcode_default', $qrcode_default);
-            Configuration::updateValue('cryptapi_qrcode_setting', $qrcode_setting);
-            Configuration::updateValue('cryptapi_color_scheme', $color_scheme);
-            Configuration::updateValue('cryptapi_qrcode_size', $qrcode_size);
-            Configuration::updateValue('cryptapi_refresh_value_interval', $refresh_value_interval);
-            Configuration::updateValue('cryptapi_order_cancelation_timeout', $order_cancelation_timeout);
-            Configuration::updateValue('cryptapi_disable_conversion', $disable_conversion);
-            Configuration::updateValue('cryptapi_coins_cache', $coins_cache);
-            Configuration::updateValue('cryptapi_cronjob_nonce', $cronjob_nonce);
-            $output = $this->displayConfirmation($this->l('Settings updated', '', 'en'));
+                foreach ($addressesToSave as $configKey => $address) {
+                    $ok = Configuration::updateValue($configKey, $address) && $ok;
+                }
+
+                // Update the selected-currencies row; create it if it doesn't exist.
+                if (empty($db->getRow('SELECT id FROM `' . _DB_PREFIX_ . 'cryptapi_coins` WHERE id=1'))) {
+                    $ok = $db->insert('cryptapi_coins', [
+                        'id' => 1,
+                        'coins' => json_encode($save_coins),
+                    ]) && $ok;
+                } else {
+                    $ok = $db->update('cryptapi_coins', [
+                        'coins' => json_encode($save_coins),
+                    ], 'id=1') && $ok;
+                }
+
+                $ok = Configuration::updateValue('cryptapi_active', $active) && $ok;
+                $ok = Configuration::updateValue('cryptapi_checkout_title', $title) && $ok;
+                $ok = Configuration::updateValue('cryptapi_api_key', $api_key) && $ok;
+                $ok = Configuration::updateValue('cryptapi_add_blockchain_fee', $add_blockchain_fee) && $ok;
+                $ok = Configuration::updateValue('cryptapi_fee_order_percentage', $fee_order_percentage) && $ok;
+                $ok = Configuration::updateValue('cryptapi_show_branding', $show_branding) && $ok;
+                $ok = Configuration::updateValue('cryptapi_qrcode_default', $qrcode_default) && $ok;
+                $ok = Configuration::updateValue('cryptapi_qrcode_setting', $qrcode_setting) && $ok;
+                $ok = Configuration::updateValue('cryptapi_color_scheme', $color_scheme) && $ok;
+                $ok = Configuration::updateValue('cryptapi_qrcode_size', $qrcode_size) && $ok;
+                $ok = Configuration::updateValue('cryptapi_refresh_value_interval', $refresh_value_interval) && $ok;
+                $ok = Configuration::updateValue('cryptapi_order_cancelation_timeout', $order_cancelation_timeout) && $ok;
+                $ok = Configuration::updateValue('cryptapi_disable_conversion', $disable_conversion) && $ok;
+                $ok = Configuration::updateValue('cryptapi_coins_cache', $coins_cache) && $ok;
+                $ok = Configuration::updateValue('cryptapi_cronjob_nonce', $cronjob_nonce) && $ok;
+
+                if (!$ok) {
+                    throw new PrestaShopException('One or more settings could not be written to the database.');
+                }
+
+                $output = $this->displayConfirmation($this->l('Settings updated', '', 'en'));
+            } catch (Exception $e) {
+                PrestaShopLogger::addLog('CryptAPI: settings save failed — ' . $e->getMessage(), 3);
+                $output = $this->displayError(
+                    $this->l('Could not save your settings. Please try again; if the problem persists, check Advanced Parameters → Logs for details.', '', 'en')
+                );
+            }
         }
 
         // display any message, then the form
@@ -670,10 +702,14 @@ class cryptapi extends PaymentModule
             ];
         }
 
+        // Build the cronjob URL through the Link class so it respects friendly
+        // URLs, SSL and multishop instead of hand-concatenating _PS_BASE_URL_.
+        $cronjobUrl = $this->context->link->getModuleLink('cryptapi', 'cronjob', ['nonce' => $default_nonce], true);
+
         $form['form']['input'][] = [
             'type' => 'text',
             'label' => $this->l('Cronjob Nonce', '', 'en'),
-            'desc' => sprintf($this->l('Add this string to your cronjob URL when creating the cronjob in your system. %1$s The request should look like this: %2$s', '', 'en'), '<br/>', '<a href="' . _PS_BASE_URL_ . __PS_BASE_URI__ . 'module/cryptapi/cronjob?nonce=' . $default_nonce . '" target="_blank">' . _PS_BASE_URL_ . __PS_BASE_URI__ . 'module/cryptapi/cronjob?nonce=' . $default_nonce . '</a>'),
+            'desc' => sprintf($this->l('Add this string to your cronjob URL when creating the cronjob in your system. %1$s The request should look like this: %2$s', '', 'en'), '<br/>', '<a href="' . $cronjobUrl . '" target="_blank">' . $cronjobUrl . '</a>'),
             'name' => 'cryptapi_cronjob_nonce',
             'required' => true,
         ];
@@ -816,6 +852,7 @@ class cryptapi extends PaymentModule
         $this->context->smarty->assign([
             'action' => $this->context->link->getModuleLink($this->name, 'validation', [], true),
             'cryptocurrencies' => $coins,
+            'cryptapi_token' => Tools::getToken('cryptapi_validation'),
             'js_dir' => Media::getJSPath(_PS_MODULE_DIR_ . '/cryptapi/views/js/cryptapi_cart.js'),
         ]);
 
@@ -938,6 +975,30 @@ class cryptapi extends PaymentModule
         return (int) Configuration::get('cryptapi_disable_conversion') === 1;
     }
 
+    /**
+     * Whitelist check: is the given coin ticker part of the merchant's enabled
+     * coin set (the selection stored in the cryptapi_coins table)? Used to reject
+     * arbitrary request-supplied coins before they reach the API helper.
+     */
+    public static function isEnabledCoin($coin)
+    {
+        if (empty($coin) || !is_string($coin)) {
+            return false;
+        }
+
+        $row = Db::getInstance()->getRow('SELECT `coins` FROM `' . _DB_PREFIX_ . 'cryptapi_coins` WHERE id=1');
+        if (empty($row) || empty($row['coins'])) {
+            return false;
+        }
+
+        $selected = json_decode($row['coins'], true);
+        if (!is_array($selected)) {
+            return false;
+        }
+
+        return in_array($coin, array_map('strval', $selected), true);
+    }
+
     public static function authorizeOrderAccess($order, $providedKey = null)
     {
         if (!Validate::isLoadedObject($order)) {
@@ -955,26 +1016,10 @@ class cryptapi extends PaymentModule
             return true;
         }
 
-        // Backward-compat: orders created before v1.3.0 had no secure_key in
-        // their emailed payment URL. The URL is captured in metadata at order
-        // creation; if it still lacks `&key=`, the email link in the customer's
-        // inbox also lacks it and would otherwise 403. Allow access for those
-        // specific orders. Orders created from v1.3.0 onwards store the key in
-        // the URL, so the shim doesn't trigger for them.
-        $responseJson = cryptapi::getPaymentResponse((int) $order->id);
-        if ($responseJson !== null) {
-            $meta = json_decode($responseJson, true);
-            if (is_array($meta) && !empty($meta['cryptapi_payment_url'])
-                && strpos($meta['cryptapi_payment_url'], '&key=') === false
-                && strpos($meta['cryptapi_payment_url'], '?key=') === false) {
-                PrestaShopLogger::addLog(
-                    'CryptAPI: legacy pre-1.3.0 order accessed without secure_key',
-                    1, null, 'Order', (int) $order->id, true
-                );
-                return true;
-            }
-        }
-
+        // No order-intrinsic fallback: even legacy (pre-1.3.0) orders require a
+        // real caller secret. The order's secure_key exists regardless of whether
+        // the emailed URL carried it, so a legitimate owner can still be granted
+        // access above via the session-owner check or a valid &key= secure_key.
         return false;
     }
 

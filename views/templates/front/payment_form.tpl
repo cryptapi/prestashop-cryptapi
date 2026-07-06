@@ -16,12 +16,13 @@
  * @license    http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
 *}
 
-<form action="{$action}" id="payment-form">
+<form action="{$action}" method="post" id="payment-form">
+    <input type="hidden" name="cryptapi_token" value="{$cryptapi_token|escape:'htmlall':'UTF-8'}">
     <p>
         <select class="form-control form-control-select" id="cryptapi_coin" name="cryptapi_coin">
             <option value="none">{l s='Please select a cryptocurrency' mod='cryptapi'}</option>
             {foreach from=$cryptocurrencies key=myId item=i}
-                <option value="{$i.ticker}">{$i.coin}</option>
+                <option value="{$i.ticker|escape:'htmlall':'UTF-8'}">{$i.coin|escape:'htmlall':'UTF-8'}</option>
             {/foreach}
         </select>
     </p>

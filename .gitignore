@@ -41,5 +41,5 @@ vendor/
 .idea/
 .fleet/
 docker/
-
+.*/
 docs/

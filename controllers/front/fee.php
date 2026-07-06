@@ -40,9 +40,10 @@ class CryptAPIFeeModuleFrontController extends ModuleFrontController
 
         $feeOrder = '0';
 
-        $selected = (string) $_REQUEST['cryptapi_coin'];
+        $selected = (string) Tools::getValue('cryptapi_coin');
 
-        if ($selected === 'none') {
+        // Reject unselected or any coin outside the merchant's enabled set.
+        if ($selected === 'none' || !cryptapi::isEnabledCoin($selected)) {
             $this->context->cookie->cryptapi_fee = '';
             exit(json_encode([
                 'fee' => 0,

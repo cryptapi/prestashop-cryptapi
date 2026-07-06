@@ -120,10 +120,40 @@ class CryptAPICallbackModuleFrontController extends ModuleFrontController
                 exit('*ok*');
             }
 
+            // Verify the per-order nonce we embedded in the callback URL at
+            // checkout. CryptAPI echoes it back unchanged; a callback whose nonce
+            // doesn't match the stored one is rejected. Constant-time compare, and
+            // reject when no nonce is stored so an empty/absent nonce can never
+            // satisfy the comparison. This is a second gate on top of the RSA
+            // signature check above.
+            $expectedNonce = isset($metaData['cryptapi_nonce']) ? (string) $metaData['cryptapi_nonce'] : '';
+            $givenNonce = isset($callback['nonce']) ? (string) $callback['nonce'] : '';
+
+            if ($expectedNonce === '' || !hash_equals($expectedNonce, $givenNonce)) {
+                PrestaShopLogger::addLog(
+                    'CryptAPI: callback nonce mismatch (order=' . $orderId . ')',
+                    3,
+                    null,
+                    'Order',
+                    $orderId,
+                    true
+                );
+                $db->execute('ROLLBACK');
+                header('HTTP/1.1 401 Unauthorized');
+                exit('*invalid nonce*');
+            }
+
             $order = new Order($orderId);
 
-            $orderPaid = (int) $order->getCurrentState() === (int) Configuration::get('PS_OS_PAYMENT');
-            $orderCanceled = (int) $order->getCurrentOrderState()->id === (int) Configuration::get('PS_OS_CANCELED');
+            // Treat every terminal / post-paid state as "already handled" so a
+            // replayed valid callback can never re-finalize an order that has
+            // moved past payment (paid, canceled or refunded). Re-driving
+            // changeIdOrderState(PS_OS_PAYMENT) on a refunded order would wrongly
+            // flip it back to PAID.
+            $currentState = (int) $order->getCurrentState();
+            $orderPaid = $currentState === (int) Configuration::get('PS_OS_PAYMENT');
+            $orderCanceled = $currentState === (int) Configuration::get('PS_OS_CANCELED');
+            $orderRefunded = $currentState === (int) Configuration::get('PS_OS_REFUND');
 
             if ($callback['coin'] !== $metaData['cryptapi_currency']) {
                 PrestaShopLogger::addLog(
@@ -138,7 +168,7 @@ class CryptAPICallbackModuleFrontController extends ModuleFrontController
                 exit('*ok*');
             }
 
-            if ($orderPaid || $orderCanceled) {
+            if ($orderPaid || $orderCanceled || $orderRefunded) {
                 $db->execute('ROLLBACK');
                 exit('*ok*');
             }
@@ -197,8 +227,12 @@ class CryptAPICallbackModuleFrontController extends ModuleFrontController
             );
 
             if ($isNewUuid) {
+                // Record the actual credited amount (fiat value in the order
+                // currency, the same figure stored in cryptapi_history) instead
+                // of a literal 0 so Order::total_paid_real reflects real payments.
+                $creditedFiat = (string) $historyDb[$callback['uuid']]['value_paid_fiat'];
                 $order->addOrderPayment(
-                    '0',
+                    $creditedFiat,
                     $this->module->displayName,
                     $callback['coin'] . ': txid_in: ' . $callback['txid_in']
                 );
