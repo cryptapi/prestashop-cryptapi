@@ -32,12 +32,14 @@ class cryptapi extends PaymentModule
     public $extra_mail_vars;
 
     public const CRYPTAPI_WAITING = 'CRYPTAPI_WAITING';
+    public const VERIFY_DOMAIN_URL = 'https://cryptapi.io/verify_domain/';
+    public const VERIFY_DOMAIN_GUIDE_URL = 'https://docs.cryptapi.io/kb/developers/how-to-verify-your-callback-domain';
 
     public function __construct()
     {
         $this->name = 'cryptapi';
         $this->tab = 'payments_gateways';
-        $this->version = '1.4.0';
+        $this->version = '1.5.0';
         $this->ps_versions_compliancy = ['min' => '1.7', 'max' => '9.99.99'];
         $this->author = 'CryptAPI';
         $this->controllers = ['state', 'validation', 'callback', 'success', 'cronjob', 'fee'];
@@ -48,7 +50,7 @@ class cryptapi extends PaymentModule
 
         parent::__construct();
 
-        $this->displayName = $this->l('CryptAPI Payment Gateway for PrestaShop', '', 'en');
+        $this->displayName = $this->l('CryptAPI – Crypto Payment Gateway for PrestaShop', '', 'en');
         $this->description = $this->l('Accept cryptocurrency payments on your PrestaShop website', '', 'en');
         $this->confirmUninstall = $this->l('Are you sure you want to uninstall?', '', 'en');
 
@@ -110,6 +112,11 @@ class cryptapi extends PaymentModule
     public function getContent()
     {
         $output = '';
+
+        // Only the domain notice's hide button posts this.
+        if (Tools::isSubmit('submitCryptapiHideDomainNotice')) {
+            Configuration::updateValue('cryptapi_domain_verified', 1);
+        }
 
         if (Tools::isSubmit('submit' . $this->name)) {
             $db = Db::getInstance();
@@ -771,7 +778,47 @@ class cryptapi extends PaymentModule
             $helper->fields_value[$key] = Tools::getValue($key, Configuration::get($key));
         }
 
-        return $helper->generateForm([$form]);
+        return $this->displayDomainNotice() . $helper->generateForm([$form]);
+    }
+
+    /**
+     * CryptAPI only creates payment addresses for callbacks on a verified
+     * domain, and the callbacks go to the shop that took the order, so the
+     * notice names every active shop's domain. Stores with an API key call
+     * BlockBee instead, so they don't get the notice. It stays until the
+     * merchant clicks its hide button.
+     */
+    protected function displayDomainNotice()
+    {
+        if (Configuration::get('cryptapi_domain_verified') || !empty(Configuration::get('cryptapi_api_key'))) {
+            return '';
+        }
+
+        $ssl = (bool) Configuration::get('PS_SSL_ENABLED');
+        $domains = [];
+        foreach (Shop::getShops(true) as $shop) {
+            // parse_url drops any port, which verification ignores.
+            $host = (string) parse_url('http://' . ($ssl ? $shop['domain_ssl'] : $shop['domain']), PHP_URL_HOST);
+            if ($host !== '') {
+                $domains[$host] = '<code>' . htmlspecialchars($host, ENT_QUOTES, 'UTF-8') . '</code>';
+            }
+        }
+
+        // Same URL and token as the settings form, so the merchant comes back here.
+        $action = AdminController::$currentIndex . '&' . http_build_query([
+            'configure' => $this->name,
+            'token' => Tools::getAdminTokenLite('AdminModules'),
+        ]);
+
+        return '<div class="alert alert-warning">'
+            . '<p><strong>' . $this->l('Verify your domain so customers can pay', '', 'en') . '</strong></p>'
+            . '<p>' . sprintf($this->l('CryptAPI only creates payment addresses for verified domains. Until you verify %s, customers can\'t pay with CryptAPI. You only need to do this once, with a DNS TXT record or an HTTPS file. Payment addresses you already created keep working.', '', 'en'), implode(', ', $domains)) . '</p>'
+            . '<form method="post" action="' . htmlspecialchars($action, ENT_QUOTES, 'UTF-8') . '">'
+            . '<a class="btn btn-primary" href="' . self::VERIFY_DOMAIN_URL . '" target="_blank" rel="noopener">' . $this->l('Verify your domain', '', 'en') . '</a> '
+            . '<a class="btn btn-default" href="' . self::VERIFY_DOMAIN_GUIDE_URL . '" target="_blank" rel="noopener">' . $this->l('Step-by-step guide', '', 'en') . '</a> '
+            . '<button type="submit" name="submitCryptapiHideDomainNotice" value="1" class="btn btn-default">' . $this->l('I\'ve verified my domain, hide this notice', '', 'en') . '</button>'
+            . '</form>'
+            . '</div>';
     }
 
     public function hookPaymentReturn($params)

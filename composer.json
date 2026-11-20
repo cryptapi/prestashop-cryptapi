@@ -1,9 +1,9 @@
 {
   "name": "prestashop/cryptapi",
-  "description": "CryptAPI Payment Gateway",
+  "description": "CryptAPI – Crypto Payment Gateway for PrestaShop",
   "homepage": "https://github.com/cryptapi/prestashop-cryptapi/",
   "license": "AFL-3.0",
-  "version": "1.3.0",
+  "version": "1.5.0",
   "authors": [
     {
       "name": "cryptAPI",
