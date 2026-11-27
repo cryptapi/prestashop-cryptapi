@@ -137,7 +137,7 @@ class CryptAPIHelper
         return null;
     }
 
-    public static function get_static_qrcode($address, $coin, $value, $size = 300)
+    public static function get_static_qrcode($address, $coin, $value, $size = 300, $timeout = 30)
     {
         if (empty($address)) {
             return null;
@@ -156,9 +156,10 @@ class CryptAPIHelper
             ];
         }
 
-        $response = CryptAPIHelper::_request($coin, 'qrcode', $params);
+        $response = CryptAPIHelper::_request($coin, 'qrcode', $params, false, $timeout);
 
-        if ($response->status == 'success') {
+        // _request() returns an array on a curl error and null on an empty reply.
+        if (isset($response->status) && $response->status == 'success') {
             return ['qr_code' => $response->qr_code, 'uri' => $response->payment_uri];
         }
 
@@ -242,7 +243,11 @@ class CryptAPIHelper
         return $params;
     }
 
-    public static function get_conversion($from, $to, $value, $disable_conversion)
+    /**
+     * Returns the converted amount, or null when the call fails. Callers must
+     * check the result with positive_amount() before saving or comparing it.
+     */
+    public static function get_conversion($from, $to, $value, $disable_conversion, $timeout = 30)
     {
         if ($disable_conversion) {
             return $value;
@@ -254,9 +259,10 @@ class CryptAPIHelper
             'value' => $value,
         ];
 
-        $response = CryptAPIHelper::_request('', 'convert', $params);
+        $response = CryptAPIHelper::_request('', 'convert', $params, false, $timeout);
 
-        if ($response->status == 'success') {
+        // _request() returns an array on a curl error and null on an empty reply.
+        if (isset($response->status) && $response->status == 'success' && isset($response->value_coin)) {
             return $response->value_coin;
         }
 
@@ -291,6 +297,35 @@ class CryptAPIHelper
         }
 
         return $value;
+    }
+
+    /**
+     * A positive amount as a plain decimal string rounded to $digits places
+     * (as sig_fig() rounds), or null. Ints and finite floats are formatted
+     * first, so a float such as 8.0E-5 becomes "0.00008000". Strings must be
+     * plain decimals: null, "", zero, negatives, whitespace and exponent
+     * strings ("1E-7") are all rejected.
+     *
+     * 1.5.0 and earlier saved sig_fig(null) = "" as the order total when a
+     * rate call failed, and bcmath reads "" as 0, so the next callback
+     * finalized the order. Every quote and stored total goes through this.
+     */
+    public static function positive_amount($value, $digits = 6)
+    {
+        if (is_int($value) || is_float($value)) {
+            if (!is_finite((float) $value)) {
+                return null;
+            }
+            $value = number_format((float) $value, 8, '.', '');
+        }
+
+        if (!is_string($value) || !preg_match('/\A[0-9]+(\.[0-9]+)?\z/', $value)) {
+            return null;
+        }
+
+        $value = CryptAPIHelper::sig_fig($value, $digits);
+
+        return bccomp($value, '0', 8) > 0 ? $value : null;
     }
 
     public static function get_pubkey($force_refresh = false)
@@ -439,7 +474,12 @@ class CryptAPIHelper
         return $candidates;
     }
 
-    private static function _request($coin, $endpoint, $params = [], $assoc = false)
+    /**
+     * @param int $timeout seconds allowed for the request (30 by default); the
+     *                     payment page's rate refresh passes 10 so a slow API
+     *                     never keeps a shopper's request waiting long.
+     */
+    private static function _request($coin, $endpoint, $params = [], $assoc = false, $timeout = 30)
     {
         $base_url = CryptAPIHelper::$base_url;
 
@@ -470,6 +510,10 @@ class CryptAPIHelper
         curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 2);
         curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, 1);
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
+        // Without these a slow API holds the PHP worker with no time limit.
+        $timeout = max(1, (int) $timeout);
+        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, min(5, $timeout));
+        curl_setopt($curl, CURLOPT_TIMEOUT, $timeout);
 
         $response = curl_exec($curl);
 

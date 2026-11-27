@@ -86,6 +86,7 @@ class CryptAPICallbackModuleFrontController extends ModuleFrontController
         $db->execute('START TRANSACTION');
 
         $pendingEmail = null;
+        $retry = false;
 
         try {
             $rows = $db->executeS(
@@ -176,15 +177,22 @@ class CryptAPICallbackModuleFrontController extends ModuleFrontController
             $disableConversion = cryptapi::isConversionDisabled();
             $qrCodeSize = Configuration::get('cryptapi_qrcode_size');
             $paid = (string) $callback['value_coin'];
-            $minTx = (string) $metaData['cryptapi_min'];
+            // Older orders stored the minimum as a float, which comes back as
+            // "8.0E-5" below 0.0001 and makes bcmath throw.
+            $minTx = CryptAPIHelper::positive_amount(isset($metaData['cryptapi_min']) ? $metaData['cryptapi_min'] : null, 8);
+            if ($minTx === null) {
+                $minTx = '0';
+            }
             $historyDb = isset($metaData['cryptapi_history']) ? $metaData['cryptapi_history'] : [];
 
             $isNewUuid = empty($historyDb[$callback['uuid']]);
 
             if ($isNewUuid) {
+                // In the order's currency, like cryptapi_total_fiat and
+                // addOrderPayment() below (1.5.0 used the shop default).
                 $fiat_conversion = CryptAPIHelper::get_conversion(
                     $metaData['cryptapi_currency'],
-                    Currency::getDefaultCurrency()->iso_code,
+                    cryptapi::orderCurrencyCode($order),
                     $paid,
                     $disableConversion
                 );
@@ -201,13 +209,51 @@ class CryptAPICallbackModuleFrontController extends ModuleFrontController
 
             $metaData['cryptapi_history'] = $historyDb;
 
-            $calc = cryptapi::calcOrder($historyDb, $metaData['cryptapi_total'], $metaData['cryptapi_total_fiat']);
-            $remaining = $calc['remaining'];
-            $remainingPending = $calc['remaining_pending'];
+            // A failed rate refresh in 1.5.0 and earlier saved an empty total,
+            // bcmath reads "" as 0, and the next callback (even a pending one
+            // at the coin minimum) finalized the order. Never work out payment
+            // state from an invalid total.
+            $cryptoTotal = CryptAPIHelper::positive_amount(isset($metaData['cryptapi_total']) ? $metaData['cryptapi_total'] : null);
 
-            $shouldFinalize = bccomp($remainingPending, '0', 8) <= 0 && bccomp($remaining, '0', 8) <= 0;
+            // Confirmed callbacks try one re-quote. Pending ones don't: the
+            // next refresh repairs the total.
+            if ($cryptoTotal === null && $callback['pending'] === '0') {
+                $cryptoTotal = cryptapi::requoteOrder($order, $metaData);
 
-            if (!$shouldFinalize) {
+                if ($cryptoTotal !== null) {
+                    $metaData['cryptapi_total'] = $cryptoTotal;
+                    unset($metaData['cryptapi_total_unavailable']);
+                }
+            }
+
+            $shouldFinalize = false;
+
+            if ($cryptoTotal === null) {
+                // Record the payment but leave the order waiting. A confirmed
+                // callback gets a 503 after the commit, so the provider sends
+                // it again; by then the total may be back.
+                $retry = $callback['pending'] === '0';
+
+                if (empty($metaData['cryptapi_total_unavailable'])) {
+                    PrestaShopLogger::addLog(
+                        'CryptAPI: crypto total unavailable; payment recorded, order not finalized yet (txid_in=' . substr((string) $callback['txid_in'], 0, 80) . ')',
+                        3,
+                        null,
+                        'Order',
+                        $orderId,
+                        true
+                    );
+                    $metaData['cryptapi_total_unavailable'] = 1;
+                }
+            } else {
+                $calc = cryptapi::calcOrder($historyDb, $cryptoTotal, $metaData['cryptapi_total_fiat']);
+                $remaining = $calc['remaining'];
+                $remainingPending = $calc['remaining_pending'];
+
+                $shouldFinalize = bccomp($remainingPending, '0', 8) <= 0 && bccomp($remaining, '0', 8) <= 0;
+            }
+
+            if ($cryptoTotal !== null && !$shouldFinalize) {
                 $qrAmount = bccomp($remainingPending, $minTx, 8) < 0 ? $minTx : $remainingPending;
                 $qrResponse = CryptAPIHelper::get_static_qrcode(
                     $metaData['cryptapi_address'],
@@ -241,7 +287,9 @@ class CryptAPICallbackModuleFrontController extends ModuleFrontController
             if ($shouldFinalize) {
                 $history = new OrderHistory();
                 $history->id_order = $orderId;
-                $history->changeIdOrderState((int) Configuration::get('PS_OS_PAYMENT'), $history->id_order, false);
+                // true: link the payments added above to the new invoice. With
+                // false, PrestaShop adds a second payment for the full total.
+                $history->changeIdOrderState((int) Configuration::get('PS_OS_PAYMENT'), $history->id_order, true);
                 $history->add();
 
                 $pendingEmail = $history;
@@ -283,6 +331,11 @@ class CryptAPICallbackModuleFrontController extends ModuleFrontController
                     true
                 );
             }
+        }
+
+        if ($retry) {
+            header('HTTP/1.1 503 Service Unavailable');
+            exit('*retry*');
         }
 
         exit('*ok*');

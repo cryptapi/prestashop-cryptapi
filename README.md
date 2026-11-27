@@ -214,6 +214,10 @@ The easiest and fastest way is via our live chat on our [website](https://crypta
 * Button to hide the notice
 * New module name
 
+#### 1.5.1
+* Bugfixes
+* The checkout title now defaults to "Pay with CryptAPI", and the service fee to 0%
+
 ### Upgrade Notice
 * No breaking changes
 * From 1.5.0, the settings page shows a domain verification notice until you click "I've verified my domain, hide this notice". If you haven't verified your domain yet, see [Do I need to verify my domain?](#do-i-need-to-verify-my-domain)

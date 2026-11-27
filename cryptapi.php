@@ -39,7 +39,7 @@ class cryptapi extends PaymentModule
     {
         $this->name = 'cryptapi';
         $this->tab = 'payments_gateways';
-        $this->version = '1.5.0';
+        $this->version = '1.5.1';
         $this->ps_versions_compliancy = ['min' => '1.7', 'max' => '9.99.99'];
         $this->author = 'CryptAPI';
         $this->controllers = ['state', 'validation', 'callback', 'success', 'cronjob', 'fee'];
@@ -90,6 +90,12 @@ class cryptapi extends PaymentModule
             `coins` TEXT
         ) ENGINE=' . _MYSQL_ENGINE_ . ' DEFAULT CHARSET=utf8mb4')) {
             return false;
+        }
+
+        // No service fee until the merchant picks one. A reinstall keeps the
+        // merchant's earlier choice.
+        if (!Configuration::hasKey('cryptapi_fee_order_percentage')) {
+            Configuration::updateValue('cryptapi_fee_order_percentage', '0');
         }
 
         return true;
@@ -330,7 +336,13 @@ class cryptapi extends PaymentModule
                         'label' => $this->l('Service fee manager:', '', 'en'),
                         'name' => 'cryptapi_fee_order_percentage',
                         'options' => [
+                            // 0% comes first: a browser shows the first
+                            // option when the saved value matches none.
                             'query' => [
+                                [
+                                    'id_option' => '0',
+                                    'name' => '0%',
+                                ],
                                 [
                                     'id_option' => '0.05',
                                     'name' => '5%',
@@ -450,10 +462,6 @@ class cryptapi extends PaymentModule
                                 [
                                     'id_option' => '0.0025',
                                     'name' => '0.25%',
-                                ],
-                                [
-                                    'id_option' => '0',
-                                    'name' => '0%',
                                 ],
                             ],
                             'id' => 'id_option',
@@ -752,7 +760,7 @@ class cryptapi extends PaymentModule
 
         // Load current value into the form
         $helper->fields_value['cryptapi_active'] = is_bool($cryptapi_active) ? 0 : $cryptapi_active;
-        $helper->fields_value['cryptapi_checkout_title'] = empty($cryptapi_checkout_title) ? $this->l('Pay with cryptocurrency', '', 'en') : $cryptapi_checkout_title;
+        $helper->fields_value['cryptapi_checkout_title'] = empty($cryptapi_checkout_title) ? $this->l('Pay with CryptAPI', '', 'en') : $cryptapi_checkout_title;
         $helper->fields_value['cryptapi_qrcode_size'] = empty($cryptapi_qrcode_size) ? '300' : $cryptapi_qrcode_size;
         $helper->fields_value['cryptapi_api_key'] = $cryptapi_api_key;
         $helper->fields_value['cryptapi_add_blockchain_fee'] = is_bool($cryptapi_add_blockchain_fee) ? 0 : $cryptapi_add_blockchain_fee;
@@ -835,7 +843,7 @@ class cryptapi extends PaymentModule
             return false;
         }
 
-        if (empty(json_decode(Db::getInstance()->getRow('SELECT * FROM `' . _DB_PREFIX_ . 'cryptapi_coins` WHERE id=1')['coins'], true))) {
+        if (empty(cryptapi::selectedCoins())) {
             return false;
         }
 
@@ -873,23 +881,34 @@ class cryptapi extends PaymentModule
         }
         $coins = [];
 
-        $selected = json_decode(Db::getInstance()->getRow('SELECT * FROM `' . _DB_PREFIX_ . 'cryptapi_coins` WHERE id=1')['coins'], true);
+        $selected = cryptapi::selectedCoins();
 
-        foreach (json_decode(Configuration::get('cryptapi_coins_cache'), true) as $ticker => $coin) {
-            foreach ($selected as $selected_coin) {
-                if ((string) $ticker === (string) $selected_coin) {
-                    if (!empty(Configuration::get(cryptapi::coinAddressConfigKey($ticker))) || !empty(Configuration::get('cryptapi_api_key'))) {
-                        $coins[] = [
-                            'ticker' => $ticker,
-                            'coin' => $coin,
-                        ];
-                    }
-                }
+        // The coin names are saved with the settings, after the active flag.
+        // If they are missing (a save that stopped partway, or settings from
+        // an older version), show the tickers rather than no coins at all.
+        $names = json_decode((string) Configuration::get('cryptapi_coins_cache'), true);
+        if (!is_array($names)) {
+            $names = [];
+            foreach ($selected as $ticker) {
+                $names[$ticker] = strtoupper($ticker);
+            }
+        }
+
+        foreach ($names as $ticker => $coin) {
+            if (!in_array((string) $ticker, $selected, true)) {
+                continue;
+            }
+
+            if (!empty(Configuration::get(cryptapi::coinAddressConfigKey($ticker))) || !empty(Configuration::get('cryptapi_api_key'))) {
+                $coins[] = [
+                    'ticker' => $ticker,
+                    'coin' => $coin,
+                ];
             }
         }
 
         $embeddedOption = new \PrestaShop\PrestaShop\Core\Payment\PaymentOption();
-        $embeddedOption->setCallToActionText(Configuration::get('cryptapi_checkout_title'))->setForm($this->generatePaymentForm($coins));
+        $embeddedOption->setCallToActionText(Configuration::get('cryptapi_checkout_title') ?: $this->l('Pay with CryptAPI', '', 'en'))->setForm($this->generatePaymentForm($coins));
 
         return $embeddedOption;
     }
@@ -1033,17 +1052,26 @@ class cryptapi extends PaymentModule
             return false;
         }
 
+        return in_array($coin, cryptapi::selectedCoins(), true);
+    }
+
+    /**
+     * The coin tickers the merchant enabled, as strings. Empty when none are
+     * saved or the saved row can't be read.
+     */
+    public static function selectedCoins()
+    {
         $row = Db::getInstance()->getRow('SELECT `coins` FROM `' . _DB_PREFIX_ . 'cryptapi_coins` WHERE id=1');
         if (empty($row) || empty($row['coins'])) {
-            return false;
+            return [];
         }
 
         $selected = json_decode($row['coins'], true);
         if (!is_array($selected)) {
-            return false;
+            return [];
         }
 
-        return in_array($coin, array_map('strval', $selected), true);
+        return array_map('strval', $selected);
     }
 
     public static function authorizeOrderAccess($order, $providedKey = null)
@@ -1155,64 +1183,251 @@ class cryptapi extends PaymentModule
         }
 
         $orderId = (int) $order['id_order'];
-        $disableConversion = cryptapi::isConversionDisabled();
-        $qrCodeSize = Configuration::get('cryptapi_qrcode_size');
-        $currency = strtolower(Currency::getDefaultCurrency()->iso_code);
 
-        $responseJson = cryptapi::getPaymentResponse($orderId);
-        if ($responseJson === null) {
+        if ($value_refresh !== 0) {
+            cryptapi::refreshOrderValue($orderId, $value_refresh);
+        }
+
+        if ($order_timeout === 0) {
             return;
         }
-        $metaData = json_decode($responseJson, true);
+
+        $responseJson = cryptapi::getPaymentResponse($orderId);
+        $metaData = $responseJson !== null ? json_decode($responseJson, true) : null;
         if (!is_array($metaData) || empty($metaData['cryptapi_last_price_update'])) {
             return;
         }
 
-        $last_price_update = $metaData['cryptapi_last_price_update'];
-        $historyDb = $metaData['cryptapi_history'];
-        $min_tx = (string) $metaData['cryptapi_min'];
-
+        $historyDb = isset($metaData['cryptapi_history']) ? $metaData['cryptapi_history'] : [];
         $calc = cryptapi::calcOrder($historyDb, $metaData['cryptapi_total'], $metaData['cryptapi_total_fiat']);
-        $remaining = $calc['remaining'];
-        $remaining_pending = $calc['remaining_pending'];
-        $already_paid = $calc['already_paid'];
 
-        if ($value_refresh !== 0 && $last_price_update + $value_refresh <= time()) {
-            if (bccomp($remaining, $remaining_pending, 8) === 0) {
-                $cryptapi_coin = $metaData['cryptapi_currency'];
-
-                $crypto_total = CryptAPIHelper::sig_fig(CryptAPIHelper::get_conversion($currency, $cryptapi_coin, $order['total_paid'], $disableConversion), 6);
-
-                cryptapi::updatePaymentResponse($orderId, 'cryptapi_total', $crypto_total);
-
-                $responseJson = cryptapi::getPaymentResponse($orderId);
-                $metaData = $responseJson !== null ? json_decode($responseJson, true) : null;
-                if (!is_array($metaData)) {
-                    return;
-                }
-
-                $calc_cron = cryptapi::calcOrder($historyDb, $metaData['cryptapi_total'], $metaData['cryptapi_total_fiat']);
-                $crypto_remaining_total = $calc_cron['remaining_pending'];
-
-                if (bccomp($remaining_pending, $min_tx, 8) <= 0 && bccomp($remaining_pending, '0', 8) > 0) {
-                    $qr_code_data_value = CryptAPIHelper::get_static_qrcode($metaData['cryptapi_address'], $cryptapi_coin, $min_tx, $qrCodeSize);
-                } else {
-                    $qr_code_data_value = CryptAPIHelper::get_static_qrcode($metaData['cryptapi_address'], $cryptapi_coin, $crypto_remaining_total, $qrCodeSize);
-                }
-
-                cryptapi::updatePaymentResponse($orderId, 'cryptapi_qr_code_value', $qr_code_data_value['qr_code']);
-            }
-
-            cryptapi::updatePaymentResponse($orderId, 'cryptapi_last_price_update', time());
-        }
-
-        if ($order_timeout !== 0 && ($metaData['cryptapi_order_created'] + $order_timeout) <= time() && bccomp($already_paid, '0', 8) <= 0) {
+        if (($metaData['cryptapi_order_created'] + $order_timeout) <= time() && bccomp($calc['already_paid'], '0', 8) <= 0) {
             $history = new OrderHistory();
             $history->id_order = $orderId;
             $history->changeIdOrderState((int) Configuration::get('PS_OS_CANCELED'), $history->id_order, false);
             $history->addWithemail();
             $history->save();
         }
+    }
+
+    /**
+     * Re-quotes an unpaid order once its refresh interval has passed. The
+     * status poll calls this every 2 s without waiting for the previous
+     * answer, and the cron job calls it too, so:
+     * - one re-quote per order at a time (GET_LOCK with no wait: a busy poll
+     *   skips it; NULL, no lock function, carries on);
+     * - the slot (cryptapi_last_price_update) is claimed before any API call;
+     * - each read and write of the payment row happens under the same
+     *   SELECT ... FOR UPDATE row lock the callback uses, so neither can
+     *   overwrite the other's changes;
+     * - a failed or invalid quote keeps the previous total and QR code.
+     */
+    public static function refreshOrderValue($orderId, $value_refresh)
+    {
+        $orderId = (int) $orderId;
+        $db = Db::getInstance();
+        $lockName = pSQL('cryptapi_refresh_' . $orderId);
+        $locked = $db->getValue("SELECT GET_LOCK('" . $lockName . "', 0)", false);
+
+        if ((string) $locked === '0') {
+            return;
+        }
+
+        try {
+            cryptapi::refreshOrderValueLocked($db, $orderId, (int) $value_refresh);
+        } finally {
+            if ((string) $locked === '1') {
+                $db->getValue("SELECT RELEASE_LOCK('" . $lockName . "')", false);
+            }
+        }
+    }
+
+    private static function refreshOrderValueLocked($db, $orderId, $value_refresh)
+    {
+        // 1. Under the row lock: is a refresh due, and is a re-quote safe?
+        // Claim the slot either way, which also resets the page's countdown.
+        $metaData = cryptapi::lockPaymentRow($db, $orderId);
+        if ($metaData === null) {
+            return;
+        }
+
+        if (empty($metaData['cryptapi_last_price_update']) || (int) $metaData['cryptapi_last_price_update'] + $value_refresh > time()) {
+            $db->execute('ROLLBACK');
+
+            return;
+        }
+
+        $requote = cryptapi::canRequote($metaData);
+        $metaData['cryptapi_last_price_update'] = time();
+        cryptapi::savePaymentRow($db, $orderId, $metaData);
+
+        if (!$requote) {
+            return;
+        }
+
+        // 2. Quote without holding the row lock. This runs inside a shopper's
+        // request, so each API call gets 10 s.
+        $order = new Order($orderId);
+        if (!Validate::isLoadedObject($order)) {
+            return;
+        }
+
+        $quote = cryptapi::requoteOrder($order, $metaData, 10);
+        if ($quote === null) {
+            return;
+        }
+
+        $history = isset($metaData['cryptapi_history']) ? $metaData['cryptapi_history'] : [];
+        $qrCode = null;
+        $calc = cryptapi::calcOrder($history, $quote, $metaData['cryptapi_total_fiat']);
+        $remainingPending = $calc['remaining_pending'];
+
+        if (bccomp($remainingPending, '0', 8) > 0) {
+            $minTx = CryptAPIHelper::positive_amount(isset($metaData['cryptapi_min']) ? $metaData['cryptapi_min'] : null, 8);
+            $qrAmount = ($minTx !== null && bccomp($remainingPending, $minTx, 8) < 0) ? $minTx : $remainingPending;
+            $qr = CryptAPIHelper::get_static_qrcode($metaData['cryptapi_address'], $metaData['cryptapi_currency'], $qrAmount, Configuration::get('cryptapi_qrcode_size'), 10);
+
+            if (is_array($qr) && !empty($qr['qr_code'])) {
+                $qrCode = $qr['qr_code'];
+            }
+        }
+
+        // 3. Apply under the row lock, re-checked: a callback may have run
+        // while we were quoting.
+        $fresh = cryptapi::lockPaymentRow($db, $orderId);
+        if ($fresh === null) {
+            return;
+        }
+
+        if (!cryptapi::canRequote($fresh)) {
+            $db->execute('ROLLBACK');
+
+            return;
+        }
+
+        $fresh['cryptapi_total'] = $quote;
+        unset($fresh['cryptapi_total_unavailable']);
+
+        // The QR code was built from the history read in step 1; skip it if
+        // a callback has changed the history since (the callback sets its own).
+        $freshHistory = isset($fresh['cryptapi_history']) ? $fresh['cryptapi_history'] : [];
+        if ($qrCode !== null && $freshHistory == $history) {
+            $fresh['cryptapi_qr_code_value'] = $qrCode;
+        }
+
+        cryptapi::savePaymentRow($db, $orderId, $fresh);
+    }
+
+    /**
+     * True when the order's total may be re-quoted: always when no valid total
+     * is stored (nothing to protect), otherwise only while no unconfirmed
+     * payment is in flight. remaining counts confirmed payments only and
+     * remaining_pending counts pending ones too, so they differ exactly while
+     * a payment is unconfirmed; re-quoting then would move the amount a
+     * shopper is part-way through paying.
+     */
+    private static function canRequote($metaData)
+    {
+        $total = CryptAPIHelper::positive_amount(isset($metaData['cryptapi_total']) ? $metaData['cryptapi_total'] : null);
+        if ($total === null) {
+            return true;
+        }
+
+        $history = isset($metaData['cryptapi_history']) ? $metaData['cryptapi_history'] : [];
+        $calc = cryptapi::calcOrder($history, $total, $metaData['cryptapi_total_fiat']);
+
+        return bccomp($calc['remaining'], $calc['remaining_pending'], 8) === 0
+            && bccomp($calc['remaining_pending'], '0', 8) > 0;
+    }
+
+    /**
+     * Quotes the order's fiat total in the ORDER's currency. 1.5.0 quoted
+     * total_paid as the shop's default currency, so on a shop whose default
+     * currency is weaker than the one the shopper paid in, the first refresh
+     * cut the amount owed. Returns the new total, or null if the quote failed.
+     */
+    public static function requoteOrder($order, $metaData, $timeout = 30)
+    {
+        if (empty($metaData['cryptapi_currency'])) {
+            return null;
+        }
+
+        // The fiat total quoted at checkout (it includes the fee); total_paid
+        // only for rows that lack it.
+        $fiat = CryptAPIHelper::positive_amount(isset($metaData['cryptapi_total_fiat']) ? $metaData['cryptapi_total_fiat'] : null, 8);
+        if ($fiat === null) {
+            $fiat = CryptAPIHelper::positive_amount((string) $order->total_paid, 8);
+        }
+        if ($fiat === null) {
+            return null;
+        }
+
+        return CryptAPIHelper::positive_amount(CryptAPIHelper::get_conversion(
+            cryptapi::orderCurrencyCode($order),
+            $metaData['cryptapi_currency'],
+            $fiat,
+            cryptapi::isConversionDisabled(),
+            $timeout
+        ));
+    }
+
+    /**
+     * The ISO code of the order's own currency, lower case, falling back to
+     * the shop default.
+     */
+    public static function orderCurrencyCode($order)
+    {
+        $currency = new Currency((int) $order->id_currency);
+
+        if (!Validate::isLoadedObject($currency)) {
+            $currency = Currency::getDefaultCurrency();
+        }
+
+        return strtolower($currency->iso_code);
+    }
+
+    /**
+     * Starts a transaction and returns the order's payment data with its row
+     * locked (SELECT ... FOR UPDATE, as the callback does), or null after a
+     * rollback. The caller ends the transaction with savePaymentRow() or
+     * ROLLBACK.
+     */
+    private static function lockPaymentRow($db, $orderId)
+    {
+        $db->execute('START TRANSACTION');
+
+        try {
+            $rows = $db->executeS(
+                'SELECT `response` FROM `' . _DB_PREFIX_ . 'cryptapi_order` WHERE order_id=' . (int) $orderId . ' LIMIT 1 FOR UPDATE',
+                true,
+                false
+            );
+        } catch (Exception $e) {
+            $db->execute('ROLLBACK');
+
+            return null;
+        }
+
+        $metaData = !empty($rows[0]['response']) ? json_decode($rows[0]['response'], true) : null;
+
+        if (!is_array($metaData)) {
+            $db->execute('ROLLBACK');
+
+            return null;
+        }
+
+        return $metaData;
+    }
+
+    private static function savePaymentRow($db, $orderId, $metaData)
+    {
+        $saved = $db->update(
+            'cryptapi_order',
+            ['response' => pSQL(json_encode($metaData), true)],
+            'order_id=' . (int) $orderId
+        );
+
+        $db->execute($saved ? 'COMMIT' : 'ROLLBACK');
     }
 
     public static function generateNonce($len = 32)

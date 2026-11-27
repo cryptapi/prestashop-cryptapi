@@ -77,11 +77,22 @@ class CryptAPIValidationModuleFrontController extends ModuleFrontController
 
         $disableConversion = cryptapi::isConversionDisabled();
         $info = CryptAPIHelper::get_info($selected);
-        $minTx = (float) $info->minimum_transaction_coin;
+        // Kept as a plain decimal string (8 places): a float minimum below
+        // 0.0001 came back from the stored JSON as "8.0E-5", which bcmath rejects.
+        $minTx = (is_object($info) && isset($info->minimum_transaction_coin))
+            ? CryptAPIHelper::positive_amount($info->minimum_transaction_coin, 8)
+            : null;
 
-        $cryptoTotal = CryptAPIHelper::sig_fig(CryptAPIHelper::get_conversion($currency->iso_code, $selected, $total, $disableConversion), 6);
+        $cryptoTotal = CryptAPIHelper::positive_amount(CryptAPIHelper::get_conversion($currency->iso_code, $selected, $total, $disableConversion));
 
-        if ($cryptoTotal < $minTx) {
+        // Refuse the order when the minimum or the quote is missing. The old
+        // loose check ("" < 0.0 is false on PHP 7) let such orders through with
+        // an empty total, which the callback then read as 0.
+        if ($minTx === null || $cryptoTotal === null) {
+            exit($this->module->l('There\'s was an error with this payment. Please try again.', 'validation'));
+        }
+
+        if (bccomp($cryptoTotal, $minTx, 8) < 0) {
             exit($this->module->l('Value too low, minimum is.' . $minTx, 'validation'));
         }
 

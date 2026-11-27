@@ -51,7 +51,12 @@ class CryptAPIStateModuleFrontController extends ModuleFrontController
         $alreadyPaid = $calc['already_paid'];
         $alreadyPaidFiat = CryptAPIHelper::sig_fig($calc['already_paid_fiat'], 2);
 
-        $min_tx = (string) $metaData['cryptapi_min'];
+        // Older orders stored the minimum as a float, which comes back as
+        // "8.0E-5" below 0.0001 and made bccomp() below throw on every poll.
+        $min_tx = CryptAPIHelper::positive_amount(isset($metaData['cryptapi_min']) ? $metaData['cryptapi_min'] : null, 8);
+        if ($min_tx === null) {
+            $min_tx = '0';
+        }
 
         $remainingPending = $calc['remaining_pending'];
         $remainingFiat = CryptAPIHelper::sig_fig($calc['remaining_fiat'], 2);
@@ -60,7 +65,9 @@ class CryptAPIStateModuleFrontController extends ModuleFrontController
 
         $paid = (int) $order->getCurrentState() === (int) Configuration::get('PS_OS_PAYMENT') ? 1 : 0;
 
-        if (bccomp($remainingPending, '0', 8) <= 0 && !$paid) {
+        // Only with a payment on record: an empty or zero total alone made the
+        // page show "payment detected".
+        if (bccomp($remainingPending, '0', 8) <= 0 && !$paid && !empty($historyDb)) {
             $cryptapiPending = 1;
         }
 
